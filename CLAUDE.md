@@ -4,6 +4,13 @@
 
 AI運用型アフィリエイト事業基盤。LP・診断導線・クリック計測を一元管理するモノレポ。
 
+> **全自動化の正仕様: [`SPEC_automation.md`](./SPEC_automation.md)**
+> 人の日次作業ゼロ化（LP自動企画→生成→投稿→計測レポート）を GitHub Actions cron で実現する。
+> Phase 1（CLI/スキーマ）・Phase 2（`pipeline/generate.ts`）・Phase 3（`pipeline/post.ts`）・
+> Phase 4（`pipeline/report-daily.ts` / `report-weekly.ts` + `.github/workflows/`）実装済み。
+> X運用ガードレール（§2.1: 1アカウント=1ジャンル / 1日3投稿ハードキャップ / 重複文面禁止 /
+> 3連続失敗で自動停止 / 公式API v2のみ）とシークレット管理（§2.2: 平文禁止、`TW_<SLUG>_*`）は緩和不可。
+
 ## 技術スタック
 
 - **モノレポ**: pnpm workspaces + Turborepo

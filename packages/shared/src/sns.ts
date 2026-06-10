@@ -29,11 +29,21 @@ function getTwitterClient(account: Pick<SNSAccount, 'api_key' | 'api_secret' | '
 }
 
 // キャラクターの口調でClaude APIを使って投稿文を生成する
-async function generateCharacterPost(account: SNSAccount, data: SNSPostData): Promise<string> {
+export async function generateCharacterPost(
+  account: SNSAccount,
+  data: SNSPostData,
+  variant?: 'morning' | 'evening'
+): Promise<string> {
   try {
     const { generateText } = await import('./claude');
     const hashtags = data.hashtags.map(tag => `#${tag}`).join(' ');
     const isTwitter = account.platform === 'twitter';
+    const variantHint =
+      variant === 'morning'
+        ? '\n- 朝の時間帯向け。これから一日が始まる読者に向けた切り口にする'
+        : variant === 'evening'
+        ? '\n- 夜の時間帯向け。一日を終えて落ち着いた読者に向けた切り口にする（朝の投稿とは異なる表現にする）'
+        : '';
 
     const prompt = `あなたは「${account.character_name}」というSNSアカウントの中の人です。
 
@@ -59,7 +69,7 @@ ${isTwitter
 - キャラクターの口調・フォーマットを守る
 - CTAを含める（URL込み）
 - 禁止表現は絶対に使わない
-- 本文のみ出力（説明不要）`
+- 本文のみ出力（説明不要）${variantHint}`
   : `Instagramの投稿キャプションを作成してください。
 - 保存したくなる価値ある内容
 - キャラクターの口調・フォーマットを守る
@@ -102,6 +112,51 @@ export async function postToTwitter(
       error: error instanceof Error ? error.message : 'Unknown error',
     };
   }
+}
+
+/**
+ * Post a pre-built body to Twitter. Used by the Phase 3 scheduler, which stores
+ * the generated text in `post_queue` and posts it verbatim. Account API keys are
+ * resolved from env `TW_<SLUG>_*` (falling back to the columns / global TWITTER_*).
+ */
+export async function postTweetText(
+  account: Pick<SNSAccount, 'slug' | 'account_name' | 'api_key' | 'api_secret' | 'access_token' | 'access_secret'>,
+  text: string
+): Promise<SNSPostResult> {
+  try {
+    const truncated = text.length > 280 ? text.substring(0, 277) + '...' : text;
+    const keys = resolveTwitterKeys(account);
+    const client = new TwitterApi(keys);
+    const tweet = await client.v2.tweet(truncated);
+    return {
+      success: true,
+      platform: 'twitter',
+      accountName: account.account_name,
+      postId: tweet.data.id,
+      postText: truncated,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      platform: 'twitter',
+      accountName: account.account_name,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+}
+
+function resolveTwitterKeys(
+  account: Pick<SNSAccount, 'slug' | 'api_key' | 'api_secret' | 'access_token' | 'access_secret'>
+): { appKey: string; appSecret: string; accessToken: string; accessSecret: string } {
+  const slug = account.slug ? account.slug.toUpperCase() : '';
+  const env = (suffix: string): string | undefined =>
+    slug ? process.env[`TW_${slug}_${suffix}`] : undefined;
+  return {
+    appKey: env('API_KEY') || account.api_key || process.env.TWITTER_API_KEY!,
+    appSecret: env('API_SECRET') || account.api_secret || process.env.TWITTER_API_SECRET!,
+    accessToken: env('ACCESS_TOKEN') || account.access_token || process.env.TWITTER_ACCESS_TOKEN!,
+    accessSecret: env('ACCESS_SECRET') || account.access_secret || process.env.TWITTER_ACCESS_SECRET!,
+  };
 }
 
 export async function postToMultipleSNS(

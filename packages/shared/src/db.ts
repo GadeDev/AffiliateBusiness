@@ -106,6 +106,51 @@ if (isProduction && DATABASE_URL) {
     )
   `);
 
+  pool.query(`
+    CREATE TABLE IF NOT EXISTS genres (
+      id          SERIAL PRIMARY KEY,
+      slug        TEXT UNIQUE NOT NULL,
+      name        TEXT NOT NULL,
+      tone_prompt TEXT NOT NULL,
+      is_active   BOOLEAN DEFAULT true
+    )
+  `);
+
+  pool.query(`
+    CREATE TABLE IF NOT EXISTS post_queue (
+      id              SERIAL PRIMARY KEY,
+      lp_slug         TEXT NOT NULL,
+      sns_account_id  INTEGER NOT NULL,
+      body            TEXT NOT NULL,
+      scheduled_at    TEXT NOT NULL,
+      status          TEXT DEFAULT 'pending',
+      posted_tweet_id TEXT,
+      error           TEXT,
+      created_at      TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )
+  `);
+
+  pool.query(`
+    CREATE TABLE IF NOT EXISTS pipeline_runs (
+      id          SERIAL PRIMARY KEY,
+      kind        TEXT NOT NULL,
+      started_at  TEXT,
+      finished_at TEXT,
+      status      TEXT,
+      detail      TEXT
+    )
+  `);
+
+  // Additive columns (idempotent via IF NOT EXISTS)
+  pool.query(`ALTER TABLE offers ADD COLUMN IF NOT EXISTS genre_slug TEXT`);
+  pool.query(`ALTER TABLE offers ADD COLUMN IF NOT EXISTS source TEXT DEFAULT 'a8'`);
+  pool.query(`ALTER TABLE offers ADD COLUMN IF NOT EXISTS priority INTEGER DEFAULT 0`);
+  pool.query(`ALTER TABLE offers ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true`);
+  pool.query(`ALTER TABLE sns_accounts ADD COLUMN IF NOT EXISTS slug TEXT`);
+  pool.query(`ALTER TABLE sns_accounts ADD COLUMN IF NOT EXISTS genre_slug TEXT`);
+  pool.query(`ALTER TABLE sns_accounts ADD COLUMN IF NOT EXISTS daily_post_cap INTEGER DEFAULT 2`);
+  pool.query(`ALTER TABLE sns_accounts ADD COLUMN IF NOT EXISTS consecutive_failures INTEGER DEFAULT 0`);
+
   db = pool;
   isPostgres = true;
 } else {
@@ -226,6 +271,55 @@ if (isProduction && DATABASE_URL) {
       created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
     )
   `);
+
+  sqliteDb.exec(`
+    CREATE TABLE IF NOT EXISTS genres (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      slug        TEXT UNIQUE NOT NULL,
+      name        TEXT NOT NULL,
+      tone_prompt TEXT NOT NULL,
+      is_active   INTEGER DEFAULT 1
+    )
+  `);
+
+  sqliteDb.exec(`
+    CREATE TABLE IF NOT EXISTS post_queue (
+      id              INTEGER PRIMARY KEY AUTOINCREMENT,
+      lp_slug         TEXT NOT NULL,
+      sns_account_id  INTEGER NOT NULL,
+      body            TEXT NOT NULL,
+      scheduled_at    TEXT NOT NULL,
+      status          TEXT DEFAULT 'pending',
+      posted_tweet_id TEXT,
+      error           TEXT,
+      created_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+    )
+  `);
+
+  sqliteDb.exec(`
+    CREATE TABLE IF NOT EXISTS pipeline_runs (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      kind        TEXT NOT NULL,
+      started_at  TEXT,
+      finished_at TEXT,
+      status      TEXT,
+      detail      TEXT
+    )
+  `);
+
+  // Additive columns (ignore errors if column already exists)
+  for (const stmt of [
+    `ALTER TABLE offers ADD COLUMN genre_slug TEXT`,
+    `ALTER TABLE offers ADD COLUMN source TEXT DEFAULT 'a8'`,
+    `ALTER TABLE offers ADD COLUMN priority INTEGER DEFAULT 0`,
+    `ALTER TABLE offers ADD COLUMN is_active INTEGER DEFAULT 1`,
+    `ALTER TABLE sns_accounts ADD COLUMN slug TEXT`,
+    `ALTER TABLE sns_accounts ADD COLUMN genre_slug TEXT`,
+    `ALTER TABLE sns_accounts ADD COLUMN daily_post_cap INTEGER DEFAULT 2`,
+    `ALTER TABLE sns_accounts ADD COLUMN consecutive_failures INTEGER DEFAULT 0`,
+  ]) {
+    try { sqliteDb.exec(stmt); } catch {}
+  }
 
   db = sqliteDb;
   isPostgres = false;

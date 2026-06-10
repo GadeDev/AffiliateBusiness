@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { generateLPContent, LPGenerationRequest, postToMultipleSNS } from '@affiliate/shared';
+import { generateAndSaveLP, LPGenerationRequest, postToMultipleSNS } from '@affiliate/shared';
 import { query } from '@affiliate/shared';
 
 export async function POST(request: NextRequest) {
@@ -14,34 +14,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Generate LP content using Claude
-    const lpContent = await generateLPContent(body);
-
-    // Create slug from title (fallback to timestamp if title is non-ASCII only)
-    let slug = body.title
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '');
-    if (!slug) {
-      slug = `lp-${Date.now()}`;
-    }
-
-    // Save to database (omit timestamps; rely on column DEFAULTs)
-    await query.run(
-      `INSERT INTO lp_configs (slug, title, description, config, target_audience, offer_id, content, keywords, genre)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        slug,
-        body.title,
-        body.description,
-        '{}',
-        body.targetAudience,
-        body.offerId,
-        JSON.stringify(lpContent),
-        JSON.stringify(body.keywords),
-        (body as any).genre || null,
-      ]
-    );
+    // Generate + persist LP via shared generator (same path as the batch pipeline)
+    const { slug, content: lpContent } = await generateAndSaveLP({
+      title: body.title,
+      description: body.description,
+      targetAudience: body.targetAudience,
+      offerId: body.offerId,
+      keywords: body.keywords,
+      genre: (body as any).genre || null,
+    });
 
     // Derive web URL from request origin (admin→web)
     const origin = request.headers.get('origin') || request.headers.get('referer') || '';

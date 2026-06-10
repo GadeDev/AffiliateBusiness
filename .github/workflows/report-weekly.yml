@@ -1,0 +1,41 @@
+name: report-weekly
+
+# Mon 08:00 JST = Sun 23:00 UTC. Weekly analysis + Claude proposals to Slack.
+on:
+  schedule:
+    - cron: '0 23 * * 0'
+  workflow_dispatch:
+
+concurrency:
+  group: report-weekly
+  cancel-in-progress: false
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Weekly analysis
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: pnpm pipeline:report-weekly
+      - name: Notify Slack on failure
+        if: failure()
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          if [ -n "$SLACK_WEBHOOK_URL" ]; then
+            curl -s -X POST -H 'Content-type: application/json' \
+              --data "{\"text\":\"🚨 report-weekly failed (run ${GITHUB_RUN_ID})\"}" \
+              "$SLACK_WEBHOOK_URL"
+          fi

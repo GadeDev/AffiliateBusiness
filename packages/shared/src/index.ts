@@ -9,6 +9,9 @@ export type {
   LPFeature,
   LPFaq,
   LPConfig,
+  Genre,
+  PostQueueItem,
+  PipelineRun,
 } from './types';
 
 export { extractUTMParams, buildUrlWithUTM } from './utils';
@@ -20,6 +23,10 @@ export { shindanConfigs, getShindanConfigs, getShindanConfigBySlug } from './dat
 
 export * from './claude';
 export * from './sns';
+export * from './lpGenerator';
+export { postSlack } from './slack';
+export { trigramSimilarity, isTooSimilar } from './similarity';
+export { jstDateString, todayJstAtUtc, daysAgoUtc } from './time';
 
 export { query } from './db';
 export { default as db } from './db';

@@ -1,0 +1,42 @@
+name: pipeline-generate
+
+# 05:00 JST = 20:00 UTC. Plans + generates LPs, queues morning/evening posts.
+on:
+  schedule:
+    - cron: '0 20 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: pipeline-generate
+  cancel-in-progress: false
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Generate LPs + queue posts
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          WEB_BASE_URL: ${{ vars.WEB_BASE_URL }}
+        run: pnpm pipeline:generate
+      - name: Notify Slack on failure
+        if: failure()
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          if [ -n "$SLACK_WEBHOOK_URL" ]; then
+            curl -s -X POST -H 'Content-type: application/json' \
+              --data "{\"text\":\"🚨 pipeline-generate failed (run ${GITHUB_RUN_ID})\"}" \
+              "$SLACK_WEBHOOK_URL"
+          fi

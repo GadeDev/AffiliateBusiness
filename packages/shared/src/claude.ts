@@ -36,6 +36,89 @@ export async function generateText(prompt: string): Promise<string> {
   return content.text;
 }
 
+export interface LPPlan {
+  title: string;
+  description: string;
+  target: string;
+  keywords: string[];
+  offer_id: string;
+}
+
+export interface PlanOfferInput {
+  id: string;
+  name: string;
+  description?: string | null;
+}
+
+/**
+ * Plan new (non-duplicate) LP ideas for a genre. Returns JSON-only output,
+ * retried once on parse failure. Each plan's offer_id must come from `offers`.
+ */
+export async function generateLPPlans(
+  genreName: string,
+  tonePrompt: string,
+  offers: PlanOfferInput[],
+  recentTitles: string[],
+  count = 1
+): Promise<LPPlan[]> {
+  const offerList = offers
+    .map((o) => `- id="${o.id}" / ${o.name}${o.description ? ` / ${o.description}` : ''}`)
+    .join('\n');
+  const recent = recentTitles.length ? recentTitles.map((t) => `- ${t}`).join('\n') : '(なし)';
+
+  const prompt = `あなたはアフィリエイトLPの編集長です。ジャンル「${genreName}」の新規LP企画を${count}件立案してください。
+
+このジャンルの文体方針:
+${tonePrompt}
+
+利用可能なオファー（offer_id は必ずこの中から選ぶこと）:
+${offerList}
+
+過去30日に作成済みのLPタイトル（これらと内容・切り口が重複しないこと）:
+${recent}
+
+以下の**正確なJSON構造の配列のみ**を返してください。前後の説明・コードブロックは一切不要です。
+
+[
+  { "title": "LPタイトル", "description": "LPの概要(1-2文)", "target": "ターゲット読者", "keywords": ["キーワード1","キーワード2"], "offer_id": "上記から選んだid" }
+]
+
+- 配列の要素数はちょうど${count}件
+- 既存タイトルと重複しない新しい切り口にすること
+- offer_id は必ず利用可能なオファーのidと一致させること
+- JSON以外は出力しないこと`;
+
+  const tryOnce = async (): Promise<LPPlan[]> => {
+    const response = await anthropic.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 2000,
+      messages: [{ role: 'user', content: prompt }],
+    });
+    const content = response.content[0];
+    if (content.type !== 'text') throw new Error('Unexpected response type');
+    let text = content.text.trim();
+    const match = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+    if (match) text = match[1].trim();
+    const parsed = JSON.parse(text);
+    const arr = Array.isArray(parsed) ? parsed : parsed.plans;
+    if (!Array.isArray(arr)) throw new Error('Plan response is not an array');
+    return arr.map((p: any) => ({
+      title: String(p.title || '').trim(),
+      description: String(p.description || '').trim(),
+      target: String(p.target || '').trim(),
+      keywords: Array.isArray(p.keywords) ? p.keywords.map((k: any) => String(k)) : [],
+      offer_id: String(p.offer_id || '').trim(),
+    }));
+  };
+
+  try {
+    return await tryOnce();
+  } catch {
+    // single retry per spec
+    return await tryOnce();
+  }
+}
+
 export async function generateLPContent(request: LPGenerationRequest): Promise<LPContent> {
   const prompt = `あなたはアフィリエイトLPの専門家です。以下の情報を基に、魅力的なLPコンテンツを生成してください。
 

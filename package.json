@@ -5,10 +5,21 @@
   "scripts": {
     "dev": "turbo run dev",
     "build": "turbo run build",
-    "lint": "turbo run lint"
+    "lint": "turbo run lint",
+    "migrate": "tsx scripts/migrate/run.ts",
+    "cli": "tsx scripts/cli.ts",
+    "pipeline:generate": "tsx pipeline/generate.ts",
+    "pipeline:post": "tsx pipeline/post.ts",
+    "pipeline:report-daily": "tsx pipeline/report-daily.ts",
+    "pipeline:report-weekly": "tsx pipeline/report-weekly.ts",
+    "seed-demo": "tsx scripts/seed-demo.ts"
   },
   "devDependencies": {
+    "tsx": "^4.22.4",
     "turbo": "^2.3.3",
     "typescript": "^5.7.2"
+  },
+  "dependencies": {
+    "dotenv": "^17.4.2"
   }
 }

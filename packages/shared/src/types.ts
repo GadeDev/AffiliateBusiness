@@ -3,6 +3,39 @@ export interface Offer {
   name: string;
   url: string;
   description?: string;
+  genre_slug?: string | null;
+  source?: string;
+  priority?: number;
+  is_active?: boolean | number;
+}
+
+export interface Genre {
+  id: number;
+  slug: string;
+  name: string;
+  tone_prompt: string;
+  is_active: boolean | number;
+}
+
+export interface PostQueueItem {
+  id: number;
+  lp_slug: string;
+  sns_account_id: number;
+  body: string;
+  scheduled_at: string;
+  status: 'pending' | 'posted' | 'failed' | 'skipped';
+  posted_tweet_id?: string | null;
+  error?: string | null;
+  created_at?: string;
+}
+
+export interface PipelineRun {
+  id: number;
+  kind: 'generate' | 'post' | 'report';
+  started_at?: string | null;
+  finished_at?: string | null;
+  status?: 'success' | 'partial' | 'failed' | null;
+  detail?: string | null;
 }
 
 export interface ClickLog {
@@ -78,6 +111,10 @@ export interface SNSAccount {
   access_secret?: string;
   is_active: boolean | number;
   created_at?: string;
+  slug?: string | null;
+  genre_slug?: string | null;
+  daily_post_cap?: number;
+  consecutive_failures?: number;
 }
 
 export interface LPConfig {

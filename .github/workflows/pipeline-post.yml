@@ -1,0 +1,62 @@
+name: pipeline-post
+
+# 06:00 JST = 21:00 UTC (prev day) / 20:00 JST = 11:00 UTC. Posts due queue items.
+on:
+  schedule:
+    - cron: '0 21 * * *'
+    - cron: '0 11 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: pipeline-post
+  cancel-in-progress: false
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Post queued tweets
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          # Per-account Twitter API v2 keys (TW_<SLUG_UPPER>_*). Add a block per active account.
+          TW_CAREER_SCOPE_JP_API_KEY: ${{ secrets.TW_CAREER_SCOPE_JP_API_KEY }}
+          TW_CAREER_SCOPE_JP_API_SECRET: ${{ secrets.TW_CAREER_SCOPE_JP_API_SECRET }}
+          TW_CAREER_SCOPE_JP_ACCESS_TOKEN: ${{ secrets.TW_CAREER_SCOPE_JP_ACCESS_TOKEN }}
+          TW_CAREER_SCOPE_JP_ACCESS_SECRET: ${{ secrets.TW_CAREER_SCOPE_JP_ACCESS_SECRET }}
+          TW_ASSET_BRIEF_JP_API_KEY: ${{ secrets.TW_ASSET_BRIEF_JP_API_KEY }}
+          TW_ASSET_BRIEF_JP_API_SECRET: ${{ secrets.TW_ASSET_BRIEF_JP_API_SECRET }}
+          TW_ASSET_BRIEF_JP_ACCESS_TOKEN: ${{ secrets.TW_ASSET_BRIEF_JP_ACCESS_TOKEN }}
+          TW_ASSET_BRIEF_JP_ACCESS_SECRET: ${{ secrets.TW_ASSET_BRIEF_JP_ACCESS_SECRET }}
+          TW_KAKEI_RESET_NOTE_API_KEY: ${{ secrets.TW_KAKEI_RESET_NOTE_API_KEY }}
+          TW_KAKEI_RESET_NOTE_API_SECRET: ${{ secrets.TW_KAKEI_RESET_NOTE_API_SECRET }}
+          TW_KAKEI_RESET_NOTE_ACCESS_TOKEN: ${{ secrets.TW_KAKEI_RESET_NOTE_ACCESS_TOKEN }}
+          TW_KAKEI_RESET_NOTE_ACCESS_SECRET: ${{ secrets.TW_KAKEI_RESET_NOTE_ACCESS_SECRET }}
+          TW_LOVE_SIGNAL_EDIT_API_KEY: ${{ secrets.TW_LOVE_SIGNAL_EDIT_API_KEY }}
+          TW_LOVE_SIGNAL_EDIT_API_SECRET: ${{ secrets.TW_LOVE_SIGNAL_EDIT_API_SECRET }}
+          TW_LOVE_SIGNAL_EDIT_ACCESS_TOKEN: ${{ secrets.TW_LOVE_SIGNAL_EDIT_ACCESS_TOKEN }}
+          TW_LOVE_SIGNAL_EDIT_ACCESS_SECRET: ${{ secrets.TW_LOVE_SIGNAL_EDIT_ACCESS_SECRET }}
+          TW_BASEBALL_POINT_JP_API_KEY: ${{ secrets.TW_BASEBALL_POINT_JP_API_KEY }}
+          TW_BASEBALL_POINT_JP_API_SECRET: ${{ secrets.TW_BASEBALL_POINT_JP_API_SECRET }}
+          TW_BASEBALL_POINT_JP_ACCESS_TOKEN: ${{ secrets.TW_BASEBALL_POINT_JP_ACCESS_TOKEN }}
+          TW_BASEBALL_POINT_JP_ACCESS_SECRET: ${{ secrets.TW_BASEBALL_POINT_JP_ACCESS_SECRET }}
+        run: pnpm pipeline:post
+      - name: Notify Slack on failure
+        if: failure()
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          if [ -n "$SLACK_WEBHOOK_URL" ]; then
+            curl -s -X POST -H 'Content-type: application/json' \
+              --data "{\"text\":\"🚨 pipeline-post failed (run ${GITHUB_RUN_ID})\"}" \
+              "$SLACK_WEBHOOK_URL"
+          fi
