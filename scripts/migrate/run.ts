@@ -1,3 +1,5 @@
+import '../../pipeline/_env';
+
 /**
  * Automation schema migration (Phase 1).
  *

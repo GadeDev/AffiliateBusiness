@@ -11,7 +11,7 @@
  * no static rebuild/redeploy is needed after generation. The Worker reads new rows
  * immediately.
  */
-import './_env';
+import { requireCiEnv } from './_env';
 import { isPg, WEB_BASE_URL, hasSucceededToday, startRun, finishRun } from './_shared';
 import {
   query,
@@ -112,6 +112,8 @@ async function buildPostBody(
 }
 
 async function main(): Promise<void> {
+  requireCiEnv(MOCK ? ['SLACK_WEBHOOK_URL'] : ['ANTHROPIC_API_KEY', 'SLACK_WEBHOOK_URL'], 'pipeline-generate');
+
   if (await hasSucceededToday('generate')) {
     console.log('[generate] already succeeded today (JST); skipping for idempotency.');
     return;

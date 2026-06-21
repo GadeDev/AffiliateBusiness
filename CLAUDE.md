@@ -4,6 +4,10 @@
 
 AI運用型アフィリエイト事業基盤。LP・診断導線・クリック計測を一元管理するモノレポ。
 
+> **重要: 実体のある作業ディレクトリ**
+> `/Users/yanagiho-mba/GrassrootsFootball/cloudflare/evil-base-battle/AffiliateBusiness`
+> `/Users/yanagiho-mba/iroiro/Affiliate/AffiliateBusiness` は別ディレクトリで、現在は本体ではない。
+
 > **全自動化の正仕様: [`SPEC_automation.md`](./SPEC_automation.md)**
 > 人の日次作業ゼロ化（LP自動企画→生成→投稿→計測レポート）を GitHub Actions cron で実現する。
 > Phase 1（CLI/スキーマ）・Phase 2（`pipeline/generate.ts`）・Phase 3（`pipeline/post.ts`）・
@@ -57,10 +61,17 @@ pnpm dev                    # 全アプリ同時起動
 | ファイル | 役割 |
 |---------|------|
 | `packages/shared/src/types.ts` | 全型定義 (Offer, ClickLog, SNSAccount, LPConfig, DiagnosticConfig等) |
-| `packages/shared/src/db.ts` | DB抽象化レイヤー（SQLite/PostgreSQL対応）+ `?`→`$N` 変換。`better-sqlite3` は `require()` で遅延ロード（Edge非対応のため） |
+| `packages/shared/src/db.ts` | DB抽象化レイヤー（SQLite/PostgreSQL対応）+ `?`→`$N` 変換。SQLiteのデフォルトDBはワークスペースルートの `data/clicks.db` を自動検出 |
 | `packages/shared/src/index.ts` | `db`, `query` を含む全エクスポート |
 | `packages/shared/src/claude.ts` | Claude API統合（LP自動生成・投稿文生成、モデル: claude-sonnet-4-6） |
 | `packages/shared/src/sns.ts` | SNS投稿機能（Twitter API v2・キャラクター別投稿生成） |
+| `scripts/ops-status.ts` | 非エンジニア向け運用ステータス確認（読み取り専用） |
+| `scripts/cli.ts` | オファー/アカウント/ジャンル管理CLI |
+| `pipeline/generate.ts` | LP企画・LP生成・投稿キュー作成 |
+| `pipeline/post.ts` | 投稿キュー処理・X投稿・失敗時停止 |
+| `pipeline/report-daily.ts` | 日次Slackレポート |
+| `pipeline/report-weekly.ts` | 週次Slackレポート・改善提案 |
+| `.github/workflows/*.yml` | GitHub Actions cron 定期実行 |
 | `packages/shared/src/data/offers.ts` | オファー一覧（DB管理。新規追加は管理画面から） |
 | `packages/shared/src/data/lp.ts` | LP設定一覧（DB管理） |
 | `packages/shared/src/data/shindan.ts` | 診断設定一覧（DB管理） |
@@ -83,6 +94,7 @@ pnpm dev                    # 全アプリ同時起動
 
 - パス: `data/clicks.db`（プロジェクトルート、gitignore済み）
 - 環境変数 `DATABASE_PATH` で上書き可
+- 2026-06-21修正: ルート実行/アプリ実行のどちらでもワークスペースルートを探索し、誤って `../../data/clicks.db` を作らない
 - ローカル: SQLite (better-sqlite3)
 - 本番: PostgreSQL（`DATABASE_URL` を設定すると自動切替）
 - SQL は `?` プレースホルダーで統一（PostgreSQL向けに内部で `$N` 変換）
@@ -237,40 +249,45 @@ ChatGPTで設計済み。5テーマ×2媒体=10アカウント。
 - ログイン画面からデフォルト認証情報の表示を削除済み
 - 本番パスワード変更済み（2026-04-09）: admin + hakamagi の2アカウント
 
-## プロジェクト状態（2026-04-14 時点）
+## プロジェクト状態（2026-06-21 時点）
 
-✅ **ビルド・型チェック通過**（3/3 アプリ）
-✅ **ローカル起動可能**（`.env.local` 設定後）
-✅ **SNSキャラクター設計完了・DB管理実装済み**
-✅ **Cloudflare Workers デプロイ完了**（web / admin 両方）
-✅ **Neon PostgreSQL 接続確認済み**
-✅ **オファー管理UI実装済み**（`/offers` ページ）
-✅ **本番動作確認**（web / admin 両方200 OK）
-✅ **複数ユーザー認証対応**（2アカウント設定済み）
-✅ **Claude APIレスポンスのJSONパース改善**（キー名揺れ・ネスト構造対応）
-✅ **LP生成・本番公開の運用フロー確立**（転職テーマで動作確認済み）
-✅ **LPテンプレートのリッチデザイン化**（グラデーション・カード・アニメーション）
-✅ **本番パスワード変更済み**（2アカウント）
-✅ **Anthropic APIクレジット確認済み**（$5.00残高、LP生成正常動作）
-✅ **Claude Code 自動運用ガイド作成**（`docs/operations.md`）
+✅ **GitHub Actions cron ベースの全自動化パイプライン実装済み**
+✅ **CLI/DBスキーマ/マイグレーション実装済み**（`pnpm migrate`, `pnpm cli`）
+✅ **LP企画→LP生成→投稿キュー作成実装済み**（`pnpm pipeline:generate`）
+✅ **投稿キュー→X投稿→失敗管理実装済み**（`pnpm pipeline:post`）
+✅ **日次/週次Slackレポート実装済み**
+✅ **X運用ガードレール実装済み**（1ジャンル1アカウント、1日3投稿上限、類似文面チェック、3連続失敗停止）
+✅ **非エンジニア向け運用ステータス確認追加**（`pnpm ops:status`）
+✅ **ローカルSQLiteのDBパス誤参照を修正**（ルート実行でも `data/clicks.db` を見る）
+✅ **GitHub Actionsの空回り成功を防止**（CIでは `DATABASE_URL` なしの一時SQLite実行を拒否）
+✅ **README / docs/operations.md を受託運用向けに更新**
 
 ⚠️ **次に必要な作業（優先順）**
-1. Claude Code Scheduled Tasks でクリックログ日次レポートを自動化（すぐ可能）
+1. GitHub Secrets / Variables を確認・登録（`DATABASE_URL`, `ANTHROPIC_API_KEY`, `SLACK_WEBHOOK_URL`, `WEB_BASE_URL`, `TW_<SLUG>_*`）
 2. X (Twitter) アカウント作成（x1〜x5@gade.jp）→ Developer Portal 申請
-3. Developer Portal 承認後、APIキーを管理画面から登録 → SNS自動投稿の有効化
-4. 残り4テーマ分のLP作成（アフィリエイトリンク取得後）
-5. Instagram Graph API 対応（x6〜x10@gade.jp を使用予定）
+3. Developer Portal 承認後、APIキーを GitHub Secrets に登録
+4. 各ジャンルの有効オファーを登録（クライアントからアフィリエイトリンク取得後）
+5. GitHub Actions の `migrate` → `pipeline-generate` → `pipeline-post` → `report-daily` を手動実行し、Slack通知まで確認
+6. Instagram Graph API 対応（x6〜x10@gade.jp を使用予定）
 
-## Claude Code 自動運用（2026-04-14 設計）
+## GitHub Actions 自動運用（2026-06-21 更新）
 
 運用の詳細は `docs/operations.md` を参照。
 
 | タスク | 頻度 | 状態 | 備考 |
 |--------|------|------|------|
-| クリックログ日次レポート | 毎朝 9:00 JST | **導入可能** | Phase 1 |
-| LP自動生成 | 週1回（月曜 10:00） | 導入可能 | Phase 2（オファー登録後） |
-| SNS自動投稿 | 毎日 12:00 / 19:00 | Twitter API承認待ち | Phase 3 |
-| LPコンテンツリフレッシュ | 週1回（木曜 10:00） | 運用安定後 | Phase 4 |
+| LP企画・生成・投稿キュー作成 | 毎日 05:00 JST | 実装済み | `pipeline-generate.yml` |
+| X投稿 | 毎日 06:00 / 20:00 JST | 実装済み、APIキー待ち | `pipeline-post.yml` |
+| 日次Slackレポート | 毎日 21:00 JST | 実装済み | `report-daily.yml` |
+| 週次Slackレポート | 月曜 08:00 JST | 実装済み | `report-weekly.yml` |
+| DBマイグレーション | 手動 | 実装済み | `migrate.yml` |
+
+## 非エンジニア運用方針（2026-06-21 追加）
+
+- 受託者は基本的に Slack 通知と `pnpm ops:status` だけを見る
+- 新規案件・APIキー・障害対応はCodexに自然文で依頼すればよい
+- 自動化は規約違反を避けるため、ASP自動ログイン、Xスクレイピング、相互RT/リプライ等は実装しない
+- クライアント報告は週次Slackレポートの生成LP数・投稿数・クリック数・改善提案を転記する
 
 ## SNS用メールアドレス（2026-04-09 確定）
 
@@ -281,4 +298,5 @@ ChatGPTで設計済み。5テーマ×2媒体=10アカウント。
 - README.md: 非エンジニア向け運用マニュアル
 - CLAUDE.md: 技術仕様・実装状況（本ファイル）
 - docs/architecture.md: アーキテクチャ設計
-- docs/operations.md: Claude Code 自動運用ガイド
+- docs/operations.md: GitHub Actions 自動運用ガイド
+- SPEC_automation.md: 全自動化の正仕様

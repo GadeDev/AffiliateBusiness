@@ -1,227 +1,180 @@
-# AffiliateBusiness 運用マニュアル
+# AffiliateBusiness 受託運用マニュアル
 
-AI を使ってアフィリエイト用の LP（ランディングページ）を自動生成し、クリック数を管理するシステムです。
+このシステムは、アフィリエイトLPの生成、X投稿、クリック計測、日次/週次レポートを自動化するための運用基盤です。
 
----
+受託者が毎日細かく触る前提ではなく、**Slack通知とステータス確認を見て、止まった時だけ対応する**形を目指します。
 
-## このシステムでできること
+## まず見るもの
 
-| やること | 使う画面 |
-|---------|---------|
-| LP（集客ページ）を AI で自動作成する | 管理画面 → LP生成 |
-| LP にアクセスした人数・クリック数を確認する | 管理画面 → クリックログ |
-| SNS（Twitter）に LP の宣伝を自動投稿する | LP生成時にまとめて実行 |
-| SNS 投稿の結果を確認する | 管理画面 → SNS履歴 |
+通常は以下の3つだけ見れば十分です。
 
----
+| 見るもの | 目的 |
+|---|---|
+| Slack通知 | 日次サマリ、週次レポート、異常通知の確認 |
+| GitHub Actions | 自動生成、投稿、レポート処理の実行状況確認 |
+| `pnpm ops:status` | 現在の運用準備・停止理由・次の対応確認 |
 
-## 最初にやること（初回のみ）
+## 現在の自動運用
 
-### 手順1：アプリを起動する
+GitHub Actions cron により、以下が自動実行されます。
 
-ターミナルを開いて以下を実行します。
+| 時刻 | 内容 | 実行ファイル |
+|---|---|---|
+| 毎日 05:00 JST | LP企画、LP生成、投稿キュー作成 | `pipeline/generate.ts` |
+| 毎日 06:00 / 20:00 JST | X投稿キューの投稿 | `pipeline/post.ts` |
+| 毎日 21:00 JST | 日次サマリをSlack通知 | `pipeline/report-daily.ts` |
+| 毎週月曜 08:00 JST | 週次分析と改善提案をSlack通知 | `pipeline/report-weekly.ts` |
 
-```bash
-cd /Users/yanagiho-mba/iroiro/Affiliate/AffiliateBusiness
-pnpm dev
-```
+LPはDBから動的に配信されるため、LP生成のたびに手動デプロイする必要はありません。
 
-「Local: http://localhost:3000」と表示されたら起動成功です。
+GitHub Actionsでは、本番DBなどの必須設定がない場合は失敗させます。見かけ上だけ成功して実際には運用されていない、という状態を避けるためです。
 
-### 手順2：管理画面にログインする
+## 受託者の定例作業
 
-ブラウザで `http://localhost:3001` を開きます。
+### 毎日
 
-- ユーザー名：`admin`
-- パスワード：`password`
-
-> ⚠️ 本番運用時はパスワードを変更してください（後述）
-
-### 手順3：APIキーを設定する（LP生成・SNS投稿を使う場合）
-
-プロジェクトフォルダの `.env.local` ファイルを開き、以下の値を設定します。
-
-```
-# LP自動生成に使う（Anthropic Claude API）
-ANTHROPIC_API_KEY=ここにキーを貼り付ける
-
-# Twitter自動投稿に使う（Twitter API）
-TWITTER_API_KEY=ここにキーを貼り付ける
-TWITTER_API_SECRET=ここにキーを貼り付ける
-TWITTER_ACCESS_TOKEN=ここにキーを貼り付ける
-TWITTER_ACCESS_SECRET=ここにキーを貼り付ける
-```
-
-設定後、アプリを再起動してください（ターミナルで `Ctrl + C` → `pnpm dev`）。
-
-#### Anthropic APIキーの取得方法
-1. https://console.anthropic.com/ を開く
-2. アカウント作成またはログイン
-3. 「API Keys」→「Create Key」でキーを作成
-4. 表示されたキー（`sk-ant-...`）を `.env.local` に貼り付ける
-
-#### Twitter APIキーの取得方法
-1. https://developer.twitter.com/ を開く
-2. アカウント作成・プロジェクト申請
-3. 「Keys and Tokens」から以下の4つを取得：
-   - API Key → `TWITTER_API_KEY`
-   - API Secret → `TWITTER_API_SECRET`
-   - Access Token → `TWITTER_ACCESS_TOKEN`
-   - Access Token Secret → `TWITTER_ACCESS_SECRET`
-
----
-
-## 毎日の運用の流れ
-
-```
-① アプリ起動（pnpm dev）
-        ↓
-② 管理画面を開く（http://localhost:3001）
-        ↓
-③ LP生成 → 新しいLPを作る
-        ↓
-④ 生成されたLPのURLを確認・SNSに投稿
-        ↓
-⑤ クリックログを確認して成果を見る
-```
-
----
-
-## LP を作る手順
-
-### 1. 管理画面上部の「LP生成」タブをクリック
-
-### 2. 以下のフォームを入力する
-
-| 入力項目 | 説明 | 例 |
-|---------|------|----|
-| LPタイトル | ページのタイトル | 「30代からの副業入門」 |
-| 説明 | LPの内容の概要 | 「副業初心者が月5万円を稼ぐ方法を紹介」 |
-| ターゲット | 誰向けのページか | 「30代会社員で副業に興味がある人」 |
-| 関連オファー | 収益化するアフィリエイトリンク | リストから選択 |
-| ジャンル | カテゴリ | ビジネス / 健康・美容 など |
-| SNS投稿アカウント | 投稿するTwitterアカウント | 登録済みのものから選択 |
-| キーワード | SNS投稿のハッシュタグになる語句 | 「副業」「在宅ワーク」など |
-
-### 3. 「LPを生成」ボタンを押す
-
-Claude AI が自動でLP文章を作成します（30秒〜1分ほどかかります）。
-
-### 4. 生成結果を確認する
-
-成功すると以下が表示されます：
-
-- **LP URL**：`http://localhost:3000/lp/〇〇〇〇` → これが公開ページです
-- **SNS投稿結果**：Twitter への投稿が成功/失敗したか
-
----
-
-## クリックログを確認する手順
-
-管理画面トップ（`http://localhost:3001`）で確認できます。
-
-| 表示項目 | 意味 |
-|---------|-----|
-| 総クリック数 | LP経由でアフィリエイトリンクを踏んだ合計回数 |
-| オファー別クリック数 | どのリンクが何回クリックされたか |
-| クリックログ一覧 | いつ・どこから・どのリンクがクリックされたか |
-
----
-
-## SNS 投稿履歴を確認する
-
-管理画面上部の「SNS履歴」タブをクリックします。
-
-- 投稿日時・対象LP・成功/失敗が一覧で確認できます
-- 失敗している場合は APIキーの設定を確認してください
-
----
-
-## 現在できないこと（開発者対応が必要）
-
-以下の操作は現在 UI が未完成のため、管理画面からは操作できません。
-必要な場合は開発者に依頼してください。
-
-| やりたいこと | 状況 |
-|------------|------|
-| SNSアカウントの追加・削除 | UI未実装（DB直接操作が必要） |
-| オファー（アフィリエイトリンク）の追加・編集 | UI未実装（DB直接操作が必要） |
-| 診断LP（質問ツリー型ページ）の追加 | UI未実装（コード編集が必要） |
-
----
-
-## 画面一覧（URL早見表）
-
-| URL | 画面 |
-|-----|------|
-| `http://localhost:3000` | LPサイト（トップ） |
-| `http://localhost:3000/lp/〇〇` | 生成されたLP |
-| `http://localhost:3001` | 管理画面（クリックログ） |
-| `http://localhost:3001/generate-lp` | LP生成 |
-| `http://localhost:3001/sns-history` | SNS投稿履歴 |
-| `http://localhost:3001/sns-accounts` | SNSアカウント一覧 |
-
----
-
-## トラブルシューティング
-
-### アプリが起動しない
+1. Slackの日次サマリを見る
+2. 異常通知がなければ何もしない
+3. 異常通知があれば、このリポジトリで以下を実行する
 
 ```bash
-# ポートが使用中の場合
-pkill -f "next dev"
-pnpm dev
+cd /Users/yanagiho-mba/GrassrootsFootball/cloudflare/evil-base-battle/AffiliateBusiness
+pnpm ops:status
 ```
 
-### LP生成でエラーが出る
+### 週1回
 
-- `ANTHROPIC_API_KEY` が `.env.local` に正しく設定されているか確認
-- キーの先頭が `sk-ant-` で始まっていることを確認
+1. Slackの週次レポートを見る
+2. クリック上位LP、伸びたジャンル、改善提案をクライアント報告に使う
+3. 新しいアフィリエイト案件や訴求方針があれば、オファーとして追加する
 
-### SNS投稿が失敗する
+### クライアントから新案件が来た時
 
-- Twitter API キーが4つすべて設定されているか確認
-- Twitter Developer Portal でアプリの「読み書き権限」が有効か確認
+オファー追加はCodexに依頼してください。依頼文はこの形で十分です。
 
-### ログを確認する
+```text
+このアフィリエイト案件を運用に追加してください。
+ジャンル: 転職
+案件名: ○○転職エージェント
+URL: https://example.com/affiliate
+説明: 20代後半から30代向けの転職支援
+優先度: 5
+```
 
-ターミナルでアプリ起動中にエラーメッセージが表示されます。
-エラー文をそのままコピーして開発者に共有してください。
-
----
-
-## セキュリティ（本番運用前に必ず対応）
+## 運用ステータス確認
 
 ```bash
-# AUTH_SECRET を生成する（ターミナルで実行）
-openssl rand -base64 32
+pnpm ops:status
 ```
 
-生成された文字列を `.env.local` の `AUTH_SECRET` に設定し、
-`ADMIN_PASSWORD` もデフォルトの `password` から変更してください。
+このコマンドはDBを書き換えません。以下を確認します。
 
----
+- Claude APIキーがあるか
+- Slack通知が設定されているか
+- ジャンルごとに有効なオファーがあるか
+- ジャンルごとに有効なXアカウントがあるか
+- X APIキーが不足していないか
+- 投稿キューが詰まっていないか
+- 3連続失敗で停止したアカウントがないか
+- 直近の自動実行が成功しているか
 
-## バックアップ
+`次の対応` に表示された項目だけ処理すればよい設計です。
 
-データベース（クリックログ等）は `data/clicks.db` に保存されています。
+## 初回セットアップで必要なもの
+
+以下は一度だけ設定します。値はリポジトリに書かず、GitHub Secrets / Cloudflare Secrets に登録します。
+
+| 項目 | 用途 |
+|---|---|
+| `DATABASE_URL` | Neon PostgreSQL |
+| `ANTHROPIC_API_KEY` | LP企画・LP本文・投稿文生成 |
+| `SLACK_WEBHOOK_URL` | 日次/週次/異常通知 |
+| `WEB_BASE_URL` | 公開LPのベースURL |
+| `TW_<SLUG>_API_KEY` | X投稿用APIキー |
+| `TW_<SLUG>_API_SECRET` | X投稿用APIシークレット |
+| `TW_<SLUG>_ACCESS_TOKEN` | X投稿用アクセストークン |
+| `TW_<SLUG>_ACCESS_SECRET` | X投稿用アクセストークンシークレット |
+
+Xアカウントのslug例:
+
+| ジャンル | slug |
+|---|---|
+| 転職 | `CAREER_SCOPE_JP` |
+| 投資 | `ASSET_BRIEF_JP` |
+| 家計改善 | `KAKEI_RESET_NOTE` |
+| 恋愛 | `LOVE_SIGNAL_EDIT` |
+| 野球 | `BASEBALL_POINT_JP` |
+
+## 管理コマンド
+
+非エンジニア運用では、直接実行せずCodexに依頼する運用で問題ありません。
 
 ```bash
-# バックアップ（日付付きでコピー）
-cp data/clicks.db data/clicks.db.backup.$(date +%Y%m%d)
+pnpm migrate
+pnpm cli genre:seed
+pnpm cli offer:list
+pnpm cli account:list
+pnpm ops:status
 ```
 
----
+オファー追加例:
 
-## 技術スタック（参考）
+```bash
+pnpm cli offer:add \
+  --name "○○転職エージェント" \
+  --url "https://example.com/affiliate" \
+  --genre career \
+  --priority 5
+```
 
-| 項目 | 内容 |
-|------|------|
-| フレームワーク | Next.js 15 (App Router) |
-| 言語 | TypeScript 5 |
-| DB（ローカル） | SQLite |
-| DB（本番） | PostgreSQL |
-| AI | Anthropic Claude API (claude-sonnet-4-6) |
-| SNS | Twitter API v2 |
-| 認証 | NextAuth.js v5 |
-| パッケージ管理 | pnpm + Turborepo |
+アカウント有効化例:
+
+```bash
+pnpm cli account:enable 1
+```
+
+## 自動運用の安全ルール
+
+Xの規約違反を避けるため、以下は仕様として固定しています。
+
+- 1アカウントは1ジャンル専属
+- 同一・類似文面の複数投稿を避ける
+- 1アカウント1日3投稿まで
+- 相互RT、相互リプライ、相互フォローの自動化はしない
+- 3連続失敗したアカウントは自動停止する
+- 公式X API v2のみ使う
+
+## クライアントへの報告材料
+
+最低限、週次で以下をまとめれば運用報告になります。
+
+| 項目 | 取得元 |
+|---|---|
+| 生成LP数 | Slack週次レポート |
+| 投稿成功数/失敗数 | Slack日次/週次レポート |
+| クリック数 | Slack日次/週次レポート、管理画面 |
+| クリック上位LP | Slack週次レポート |
+| 来週の改善提案 | Slack週次レポート |
+
+## よくある停止理由
+
+| 表示/症状 | 対応 |
+|---|---|
+| `ANTHROPIC_API_KEY 未設定` | GitHub SecretsにClaude APIキーを登録 |
+| `SLACK_WEBHOOK_URL 未設定` | Slack Incoming Webhookを作成してGitHub Secretsに登録 |
+| `X APIキーを登録する` | Twitter Developer Portal承認後、GitHub Secretsに4キーを登録 |
+| `3連続失敗で停止中` | APIキー・権限を直してから `account:enable` |
+| `有効オファーを登録する` | クライアントから案件URLを受け取り、オファー追加 |
+
+## 本番URL
+
+| アプリ | URL |
+|---|---|
+| LP公開 | https://affiliate-web.yanagiho.workers.dev |
+| 管理画面 | https://affiliate-admin.yanagiho.workers.dev |
+
+## 技術情報
+
+詳しい実装状況は [CLAUDE.md](/Users/yanagiho-mba/GrassrootsFootball/cloudflare/evil-base-battle/AffiliateBusiness/CLAUDE.md) を参照してください。
+
+全自動化の仕様は [SPEC_automation.md](/Users/yanagiho-mba/GrassrootsFootball/cloudflare/evil-base-battle/AffiliateBusiness/SPEC_automation.md) にあります。

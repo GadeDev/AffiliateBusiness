@@ -12,6 +12,14 @@ import path from 'path';
 
 loadEnv({ path: path.join(process.cwd(), '.env.local'), quiet: true });
 
+export function requireCiEnv(names: string[], context: string): void {
+  if (process.env.GITHUB_ACTIONS !== 'true') return;
+  const missing = names.filter((name) => !process.env[name]);
+  if (missing.length > 0) {
+    throw new Error(`[${context}] Missing required GitHub Actions configuration: ${missing.join(', ')}`);
+  }
+}
+
 const url = process.env.DATABASE_URL;
 if (url) {
   let invalid = false;
@@ -25,6 +33,10 @@ if (url) {
     delete process.env.DATABASE_URL;
     console.warn('[env] DATABASE_URL looks like a placeholder; falling back to local SQLite');
   }
+}
+
+if (process.env.GITHUB_ACTIONS === 'true' && !process.env.DATABASE_URL) {
+  throw new Error('[env] DATABASE_URL is required in GitHub Actions. Refusing to run against temporary SQLite.');
 }
 
 if (!process.env.DATABASE_URL && !process.env.DATABASE_PATH) {

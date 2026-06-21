@@ -8,6 +8,21 @@ const DATABASE_URL = process.env.DATABASE_URL;
 let db: any;
 let isPostgres = false;
 
+function findWorkspaceRoot(start: string): string {
+  let current = path.resolve(start);
+  while (true) {
+    if (
+      fs.existsSync(path.join(current, 'pnpm-workspace.yaml')) ||
+      fs.existsSync(path.join(current, 'turbo.json'))
+    ) {
+      return current;
+    }
+    const parent = path.dirname(current);
+    if (parent === current) return path.resolve(start);
+    current = parent;
+  }
+}
+
 if (isProduction && DATABASE_URL) {
   // PostgreSQL for production (Neon serverless - Edge/Cloudflare compatible)
   const pool = new Pool({
@@ -156,7 +171,7 @@ if (isProduction && DATABASE_URL) {
 } else {
   // SQLite for development (better-sqlite3 is loaded lazily to avoid import errors on Vercel)
   const DB_PATH =
-    process.env.DATABASE_PATH ?? path.join(process.cwd(), '../../data/clicks.db');
+    process.env.DATABASE_PATH ?? path.join(findWorkspaceRoot(process.cwd()), 'data', 'clicks.db');
 
   const dir = path.dirname(DB_PATH);
   if (!fs.existsSync(dir)) {

@@ -9,7 +9,7 @@
  * Test hooks:
  *  - REPORT_NOW=<ISO>  override "now" (acceptance test #5)
  */
-import './_env';
+import { requireCiEnv } from './_env';
 import { startRun, finishRun } from './_shared';
 import { query, postSlack, jstDateString } from '@affiliate/shared';
 
@@ -22,6 +22,8 @@ function fmt(n: number): string {
 }
 
 async function main(): Promise<void> {
+  requireCiEnv(['SLACK_WEBHOOK_URL'], 'report-daily');
+
   const runId = await startRun('report');
   const today = jstDateString(nowDate());
 

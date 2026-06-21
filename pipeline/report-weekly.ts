@@ -7,7 +7,7 @@
  *  - REPORT_NOW=<ISO>  override "now"
  *  - REPORT_MOCK=1     skip Claude (deterministic fake proposals)
  */
-import './_env';
+import { requireCiEnv } from './_env';
 import { startRun, finishRun } from './_shared';
 import { query, postSlack, generateText, jstDateString } from '@affiliate/shared';
 
@@ -32,6 +32,8 @@ function windowFilter(rows: any[], field: string, fromMs: number, toMs: number):
 }
 
 async function main(): Promise<void> {
+  requireCiEnv(MOCK ? ['SLACK_WEBHOOK_URL'] : ['ANTHROPIC_API_KEY', 'SLACK_WEBHOOK_URL'], 'report-weekly');
+
   const runId = await startRun('report');
   const now = nowDate();
   const day = 86400_000;

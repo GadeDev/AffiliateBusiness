@@ -14,7 +14,7 @@
  *  - POST_MOCK=fail     simulate failures (acceptance test #7)
  *  - POST_NO_SLEEP=1    skip the inter-account delay (tests)
  */
-import './_env';
+import { requireCiEnv } from './_env';
 import { isPg, startRun, finishRun } from './_shared';
 import { query, postTweetText, postSlack, jstDateString, type SNSAccount } from '@affiliate/shared';
 
@@ -70,6 +70,8 @@ async function recordSuccess(account: SNSAccount): Promise<void> {
 }
 
 async function main(): Promise<void> {
+  requireCiEnv(['SLACK_WEBHOOK_URL'], 'pipeline-post');
+
   const runId = await startRun('post');
   const summary = { due: 0, posted: 0, failed: 0, skipped: 0, accounts: 0 };
 

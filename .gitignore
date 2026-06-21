@@ -4,6 +4,7 @@ node_modules/
 .open-next/
 dist/
 out/
+*.tsbuildinfo
 
 # DB
 data/*.db
