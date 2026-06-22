@@ -25,6 +25,86 @@ export interface LPContent {
   footer: string;
 }
 
+function isFinancialOffer(request: LPGenerationRequest): boolean {
+  const text = [
+    request.title,
+    request.description,
+    request.targetAudience,
+    ...request.keywords,
+  ].join(' ').toLowerCase();
+
+  return [
+    'fx',
+    'cfd',
+    'dmm fx',
+    '投資',
+    '金融',
+    '証券',
+    '為替',
+    '資産運用',
+    '口座開設',
+    'レバレッジ',
+    'スプレッド',
+  ].some((term) => text.includes(term.toLowerCase()));
+}
+
+function financialGuardrails(request: LPGenerationRequest): string {
+  if (!isFinancialOffer(request)) return '';
+
+  return `
+
+金融・投資案件の必須ルール:
+- 元本保証、利益保証、確実に儲かる、簡単に稼げる、リスクなし等の表現は禁止
+- 取引には価格変動等により損失が生じる可能性があり、預託証拠金を上回る損失が生じるおそれがあることを必ず明記
+- 手数料、スプレッド、キャンペーン、口座開設条件、成果条件は変更される可能性があるため、公式サイトで最新条件を確認する導線にする
+- CTAは「公式サイトで詳細を確認する」「リスクと条件を確認する」など確認型にし、「今すぐ稼ぐ」「絶対に得する」等の煽りは禁止
+- 読者が仕組みとリスクを理解して判断できる、落ち着いた情報提供型のLPにする`;
+}
+
+function normalizeFinancialCta(cta?: string): string | undefined {
+  if (!cta) return undefined;
+  if (/(申し込|始め|登録|稼|儲|今すぐ|無料)/.test(cta)) {
+    return '公式サイトで詳細を確認する';
+  }
+  return cta;
+}
+
+function ensureFinancialRiskCopy(content: LPContent): LPContent {
+  const riskNotice =
+    'FXは元本や利益が保証されるものではありません。価格変動やスワップポイント等により損失が生じる場合があり、相場変動によっては預託証拠金を上回る損失が生じるおそれがあります。取引条件、手数料、スプレッド、キャンペーンの最新情報は必ず公式サイトで確認してください。';
+
+  const sections = Array.isArray(content.sections) ? content.sections : [];
+  const normalizedSections = sections.map((section) => ({
+    ...section,
+    cta: normalizeFinancialCta(section.cta),
+  }));
+  const allText = [
+    content.title,
+    content.headline,
+    content.subheadline,
+    content.footer,
+    ...normalizedSections.flatMap((section) => [section.title, section.content]),
+  ].join('\n');
+
+  if (!/(リスク|損失|元本|証拠金)/.test(allText)) {
+    normalizedSections.push({
+      title: '取引前に確認したいリスク',
+      content: riskNotice,
+      cta: '公式サイトで詳細を確認する',
+    });
+  }
+
+  const footer = /(元本|損失|リスク|証拠金)/.test(content.footer)
+    ? content.footer
+    : `${content.footer}\n${riskNotice}`;
+
+  return {
+    ...content,
+    sections: normalizedSections,
+    footer,
+  };
+}
+
 export async function generateText(prompt: string): Promise<string> {
   const response = await anthropic.messages.create({
     model: 'claude-sonnet-4-6',
@@ -127,6 +207,7 @@ export async function generateLPContent(request: LPGenerationRequest): Promise<L
 - 説明: ${request.description}
 - ターゲット: ${request.targetAudience}
 - キーワード: ${request.keywords.join(', ')}
+${financialGuardrails(request)}
 
 以下の**正確なJSON構造**で返してください。余計なキーやネストは絶対に追加しないでください。contentは必ず文字列（配列やオブジェクトではなく）にしてください。
 
@@ -142,7 +223,7 @@ export async function generateLPContent(request: LPGenerationRequest): Promise<L
 }
 
 - sectionsは3〜5個
-- 内容は日本語で、説得力がありコンバージョン率の高いものにしてください
+- 内容は日本語で、読者の判断に役立つ具体性と説得力を持たせてください
 - JSON以外のテキストは出力しないでください`;
 
   const response = await anthropic.messages.create({
@@ -188,7 +269,8 @@ export async function generateLPContent(request: LPGenerationRequest): Promise<L
         ...(s.cta && typeof s.cta === 'string' ? { cta: s.cta } : s.cta?.text ? { cta: s.cta.text } : {}),
       }));
     }
-    return parsed as LPContent;
+    const normalized = parsed as LPContent;
+    return isFinancialOffer(request) ? ensureFinancialRiskCopy(normalized) : normalized;
   } catch (error) {
     throw new Error('Failed to parse Claude response as JSON');
   }

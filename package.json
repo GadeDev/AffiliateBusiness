@@ -12,6 +12,7 @@
     "pipeline:post": "tsx pipeline/post.ts",
     "pipeline:report-daily": "tsx pipeline/report-daily.ts",
     "pipeline:report-weekly": "tsx pipeline/report-weekly.ts",
+    "ops:lp-generate": "tsx scripts/generate-lp-once.ts",
     "ops:status": "tsx scripts/ops-status.ts",
     "seed-demo": "tsx scripts/seed-demo.ts"
   },

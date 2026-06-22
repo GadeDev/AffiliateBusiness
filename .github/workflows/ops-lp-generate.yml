@@ -1,0 +1,77 @@
+name: ops-lp-generate
+
+# Manual operational helper. Generates one LP for a known affiliate offer.
+on:
+  workflow_dispatch:
+    inputs:
+      title:
+        description: LP title
+        required: true
+        type: string
+      description:
+        description: LP summary / compliance notes
+        required: true
+        type: string
+      target_audience:
+        description: Target audience
+        required: true
+        type: string
+      offer_id:
+        description: Offer ID, e.g. dmm-fx-a8
+        required: true
+        type: string
+      keywords:
+        description: Comma-separated keywords
+        required: true
+        type: string
+      genre:
+        description: Genre slug
+        required: true
+        type: choice
+        options:
+          - career
+          - investment
+          - household
+          - love
+          - baseball
+
+concurrency:
+  group: ops-lp-generate
+  cancel-in-progress: false
+
+jobs:
+  generate-lp:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Generate LP
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          WEB_BASE_URL: ${{ vars.WEB_BASE_URL }}
+          LP_TITLE: ${{ inputs.title }}
+          LP_DESCRIPTION: ${{ inputs.description }}
+          LP_TARGET_AUDIENCE: ${{ inputs.target_audience }}
+          LP_OFFER_ID: ${{ inputs.offer_id }}
+          LP_KEYWORDS: ${{ inputs.keywords }}
+          LP_GENRE: ${{ inputs.genre }}
+        run: pnpm ops:lp-generate
+      - name: Notify Slack on failure
+        if: failure()
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          if [ -n "$SLACK_WEBHOOK_URL" ]; then
+            curl -s -X POST -H 'Content-type: application/json' \
+              --data "{\"text\":\"🚨 ops-lp-generate failed: ${{ inputs.title }} (run ${GITHUB_RUN_ID})\"}" \
+              "$SLACK_WEBHOOK_URL"
+          fi

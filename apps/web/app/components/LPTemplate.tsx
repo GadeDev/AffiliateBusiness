@@ -1,5 +1,29 @@
 import type { LPConfig } from '@affiliate/shared';
 
+function isFinancialLP(config: LPConfig, content: any): boolean {
+  const text = [
+    config.genre,
+    config.title,
+    config.description,
+    content?.title,
+    content?.headline,
+    content?.subheadline,
+  ].filter(Boolean).join(' ').toLowerCase();
+
+  return config.genre === 'investment' || [
+    'fx',
+    'cfd',
+    '投資',
+    '金融',
+    '証券',
+    '為替',
+    '資産運用',
+    '口座開設',
+    'レバレッジ',
+    'スプレッド',
+  ].some((term) => text.includes(term.toLowerCase()));
+}
+
 export function LPTemplate({ config }: { config: LPConfig }) {
   const ctaUrl = (position: string) =>
     `/go/${config.hero?.offer_id || config.content?.offerId}?utm_source=lp&utm_medium=${position}&utm_campaign=${config.slug}`;
@@ -8,6 +32,32 @@ export function LPTemplate({ config }: { config: LPConfig }) {
   if (config.content) {
     const content = config.content;
     const sections = content.sections || [];
+    const isFinancial = isFinancialLP(config, content);
+    const heroCta = isFinancial ? '公式サイトで詳細を確認する' : '今すぐ申し込む';
+    const heroNote = isFinancial
+      ? '※ FXは元本や利益が保証されず、預託証拠金を上回る損失が生じるおそれがあります。'
+      : '※ 無料・登録30秒';
+    const trustItems = isFinancial
+      ? ['リスク説明を確認', '手数料・スプレッドを確認', '無理のない取引判断']
+      : ['完全無料', '登録かんたん30秒', '退会自由'];
+    const stepsTitle = isFinancial ? '確認して進める3ステップ' : 'かんたん3ステップ';
+    const stepsDescription = isFinancial ? '条件とリスクを確認してから判断できます' : 'お申し込みはとってもシンプル';
+    const steps = isFinancial
+      ? [
+          { step: '01', title: 'リスクを確認', desc: '元本割れや証拠金以上の損失リスクを確認', color: 'from-blue-500 to-blue-700' },
+          { step: '02', title: '条件を比較', desc: '手数料・スプレッド・成果条件を確認', color: 'from-indigo-500 to-indigo-700' },
+          { step: '03', title: '納得して判断', desc: '公式サイトの最新条件を見て判断', color: 'from-purple-500 to-purple-700' },
+        ]
+      : [
+          { step: '01', title: '無料登録', desc: 'まずは30秒でかんたん登録', color: 'from-blue-500 to-blue-700' },
+          { step: '02', title: '情報入力', desc: 'あなたに合ったプランを診断', color: 'from-indigo-500 to-indigo-700' },
+          { step: '03', title: '利用開始', desc: 'すぐにサービスを利用可能', color: 'from-purple-500 to-purple-700' },
+        ];
+    const footerTitle = isFinancial ? 'リスクと条件を確認して判断しましょう' : '今すぐ始めましょう';
+    const footerCta = isFinancial ? '公式サイトで詳細を確認する' : '無料で始める';
+    const footerNote = isFinancial
+      ? '※ 本ページは広告を含みます。投資判断はご自身の責任で行ってください。'
+      : '※ 費用は一切かかりません';
 
     return (
       <div className="font-sans">
@@ -32,28 +82,22 @@ export function LPTemplate({ config }: { config: LPConfig }) {
               href={ctaUrl('hero')}
               className="group inline-flex items-center gap-2 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-gray-900 font-bold py-4 px-10 rounded-2xl text-xl transition-all shadow-lg shadow-amber-400/30 hover:shadow-xl hover:shadow-amber-400/40 hover:-translate-y-0.5"
             >
-              今すぐ申し込む
+              {heroCta}
               <svg className="w-5 h-5 transition-transform group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 7l5 5m0 0l-5 5m5-5H6" /></svg>
             </a>
-            <p className="mt-4 text-indigo-300 text-sm">※ 無料・登録30秒</p>
+            <p className="mt-4 text-indigo-300 text-sm">{heroNote}</p>
           </div>
         </section>
 
         {/* Trust bar */}
         <section className="bg-white border-b py-6 px-4">
           <div className="max-w-4xl mx-auto flex flex-wrap justify-center gap-8 text-center text-gray-500 text-sm">
-            <div className="flex items-center gap-2">
-              <svg className="w-5 h-5 text-green-500" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
-              完全無料
-            </div>
-            <div className="flex items-center gap-2">
-              <svg className="w-5 h-5 text-green-500" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
-              登録かんたん30秒
-            </div>
-            <div className="flex items-center gap-2">
-              <svg className="w-5 h-5 text-green-500" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
-              退会自由
-            </div>
+            {trustItems.map((item) => (
+              <div key={item} className="flex items-center gap-2">
+                <svg className="w-5 h-5 text-green-500" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
+                {item}
+              </div>
+            ))}
           </div>
         </section>
 
@@ -124,15 +168,11 @@ export function LPTemplate({ config }: { config: LPConfig }) {
         <section className="py-20 px-4 bg-white">
           <div className="max-w-4xl mx-auto">
             <h2 className="text-2xl sm:text-3xl font-bold text-center mb-4 text-gray-900">
-              かんたん3ステップ
+              {stepsTitle}
             </h2>
-            <p className="text-gray-500 text-center mb-12">お申し込みはとってもシンプル</p>
+            <p className="text-gray-500 text-center mb-12">{stepsDescription}</p>
             <div className="grid sm:grid-cols-3 gap-6">
-              {[
-                { step: '01', title: '無料登録', desc: 'まずは30秒でかんたん登録', color: 'from-blue-500 to-blue-700' },
-                { step: '02', title: '情報入力', desc: 'あなたに合ったプランを診断', color: 'from-indigo-500 to-indigo-700' },
-                { step: '03', title: '利用開始', desc: 'すぐにサービスを利用可能', color: 'from-purple-500 to-purple-700' },
-              ].map((item, i) => (
+              {steps.map((item, i) => (
                 <div key={i} className="relative text-center">
                   {i < 2 && (
                     <div className="hidden sm:block absolute top-8 left-[60%] w-[80%] h-0.5 bg-gradient-to-r from-gray-200 to-gray-100" />
@@ -152,16 +192,16 @@ export function LPTemplate({ config }: { config: LPConfig }) {
         <section className="relative overflow-hidden bg-gradient-to-br from-gray-900 via-indigo-950 to-gray-900 text-white py-20 px-4">
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-500/20 via-transparent to-transparent" />
           <div className="relative max-w-2xl mx-auto text-center">
-            <h2 className="text-3xl sm:text-4xl font-bold mb-4">今すぐ始めましょう</h2>
+            <h2 className="text-3xl sm:text-4xl font-bold mb-4">{footerTitle}</h2>
             <p className="text-gray-400 mb-10 text-lg leading-relaxed">{content.footer}</p>
             <a
               href={ctaUrl('footer')}
               className="group inline-flex items-center gap-2 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-gray-900 font-bold py-5 px-12 rounded-2xl text-xl transition-all shadow-lg shadow-amber-400/20 hover:shadow-xl hover:shadow-amber-400/30 hover:-translate-y-0.5"
             >
-              無料で始める
+              {footerCta}
               <svg className="w-5 h-5 transition-transform group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 7l5 5m0 0l-5 5m5-5H6" /></svg>
             </a>
-            <p className="mt-4 text-gray-500 text-sm">※ 費用は一切かかりません</p>
+            <p className="mt-4 text-gray-500 text-sm">{footerNote}</p>
           </div>
         </section>
       </div>

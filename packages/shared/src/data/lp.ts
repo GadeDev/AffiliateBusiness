@@ -10,7 +10,7 @@ export async function getLPConfigs(): Promise<LPConfig[]> {
 // Function to get LP config by slug
 export async function getLPConfigBySlug(slug: string): Promise<LPConfig | null> {
   const row = await query.get(
-    'SELECT slug, title, description, config, target_audience, offer_id, content, keywords FROM lp_configs WHERE slug = ?',
+    'SELECT slug, title, description, config, target_audience, offer_id, content, keywords, genre FROM lp_configs WHERE slug = ?',
     [slug]
   ) as any;
 
@@ -23,6 +23,7 @@ export async function getLPConfigBySlug(slug: string): Promise<LPConfig | null> 
       slug: row.slug,
       title: row.title,
       description: row.description,
+      genre: row.genre,
       hero: {
         headline: content.headline,
         subheadline: content.subheadline,

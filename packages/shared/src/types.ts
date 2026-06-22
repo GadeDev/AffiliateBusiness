@@ -121,6 +121,7 @@ export interface LPConfig {
   slug: string;
   title: string;
   description: string;
+  genre?: string | null;
   hero: {
     headline: string;
     subheadline: string;
