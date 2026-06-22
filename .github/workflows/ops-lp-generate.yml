@@ -35,10 +35,6 @@ on:
           - love
           - baseball
 
-concurrency:
-  group: ops-lp-generate
-  cancel-in-progress: false
-
 jobs:
   generate-lp:
     runs-on: ubuntu-latest
