@@ -4,7 +4,7 @@
  *
  * Commands:
  *   genre:seed
- *   offer:add --name --url --genre [--id] [--source a8] [--priority 0]
+ *   offer:add --name --url --genre [--id] [--description] [--source a8] [--priority 0]
  *   offer:list
  *   offer:disable <id> | offer:enable <id>
  *   account:add --slug --genre [--platform twitter] [--name] [--daily-cap 2]
@@ -125,6 +125,7 @@ async function offerAdd(flags: Record<string, string>): Promise<void> {
   const name = requireFlag(flags, 'name');
   const url = requireFlag(flags, 'url');
   const genre = requireFlag(flags, 'genre');
+  const description = flags.description && flags.description !== 'true' ? flags.description : null;
   if (!(await genreExists(genre))) {
     console.error(`Unknown genre: ${genre}. Run "pnpm cli genre:seed" or check genre:list.`);
     process.exit(1);
@@ -135,9 +136,9 @@ async function offerAdd(flags: Record<string, string>): Promise<void> {
   if (!id || id.length < 3) id = `${genre}-${Date.now().toString(36)}`;
 
   await query.run(
-    `INSERT INTO offers (id, name, url, genre_slug, source, priority, is_active)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    [id, name, url, genre, source, priority, bool(true)]
+    `INSERT INTO offers (id, name, url, description, genre_slug, source, priority, is_active)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [id, name, url, description, genre, source, priority, bool(true)]
   );
   console.log(`added offer: ${id} (${name}) [genre=${genre}, source=${source}]`);
 }
@@ -237,7 +238,7 @@ function usage(): void {
   console.log(`Usage: pnpm cli <command>
 
   genre:seed
-  offer:add --name <n> --url <u> --genre <g> [--id <id>] [--source a8] [--priority 0]
+  offer:add --name <n> --url <u> --genre <g> [--id <id>] [--description <text>] [--source a8] [--priority 0]
   offer:list
   offer:disable <id>
   offer:enable <id>

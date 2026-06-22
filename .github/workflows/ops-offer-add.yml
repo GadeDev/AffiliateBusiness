@@ -1,0 +1,97 @@
+name: ops-offer-add
+
+# Manual operational helper. Adds one affiliate offer to production DB.
+on:
+  workflow_dispatch:
+    inputs:
+      id:
+        description: Offer ID, e.g. dmm-fx-a8
+        required: true
+        type: string
+      name:
+        description: Offer name
+        required: true
+        type: string
+      url:
+        description: Affiliate URL
+        required: true
+        type: string
+      genre:
+        description: Genre slug
+        required: true
+        type: choice
+        options:
+          - career
+          - investment
+          - household
+          - love
+          - baseball
+      description:
+        description: Short offer description
+        required: false
+        type: string
+      source:
+        description: ASP/source
+        required: true
+        default: a8
+        type: choice
+        options:
+          - a8
+          - valuecommerce
+          - moshimo
+          - other
+      priority:
+        description: Priority, higher means more likely to be selected
+        required: true
+        default: "5"
+        type: string
+
+concurrency:
+  group: ops-offer-add
+  cancel-in-progress: false
+
+jobs:
+  add-offer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Add offer
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          pnpm cli offer:add \
+            --id "${{ inputs.id }}" \
+            --name "${{ inputs.name }}" \
+            --url "${{ inputs.url }}" \
+            --genre "${{ inputs.genre }}" \
+            --description "${{ inputs.description }}" \
+            --source "${{ inputs.source }}" \
+            --priority "${{ inputs.priority }}"
+      - name: Notify Slack
+        if: success()
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          if [ -n "$SLACK_WEBHOOK_URL" ]; then
+            curl -s -X POST -H 'Content-type: application/json' \
+              --data "{\"text\":\"AffiliateBusiness: オファーを追加しました: ${{ inputs.name }} (${{ inputs.genre }})\"}" \
+              "$SLACK_WEBHOOK_URL"
+          fi
+      - name: Notify Slack on failure
+        if: failure()
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          if [ -n "$SLACK_WEBHOOK_URL" ]; then
+            curl -s -X POST -H 'Content-type: application/json' \
+              --data "{\"text\":\"🚨 ops-offer-add failed: ${{ inputs.name }} (run ${GITHUB_RUN_ID})\"}" \
+              "$SLACK_WEBHOOK_URL"
+          fi

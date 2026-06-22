@@ -1,0 +1,47 @@
+name: ops-setup
+
+# Manual operational helper. Seeds the master genres in production DB.
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: ops-setup
+  cancel-in-progress: false
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Seed genres
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: pnpm cli genre:seed
+      - name: Notify Slack
+        if: success()
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          if [ -n "$SLACK_WEBHOOK_URL" ]; then
+            curl -s -X POST -H 'Content-type: application/json' \
+              --data '{"text":"AffiliateBusiness: ジャンル初期化が完了しました。"}' \
+              "$SLACK_WEBHOOK_URL"
+          fi
+      - name: Notify Slack on failure
+        if: failure()
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          if [ -n "$SLACK_WEBHOOK_URL" ]; then
+            curl -s -X POST -H 'Content-type: application/json' \
+              --data "{\"text\":\"🚨 ops-setup failed (run ${GITHUB_RUN_ID})\"}" \
+              "$SLACK_WEBHOOK_URL"
+          fi
