@@ -1,4 +1,4 @@
-import { Pool } from '@neondatabase/serverless';
+import { neon } from '@neondatabase/serverless';
 import fs from 'fs';
 import path from 'path';
 
@@ -24,149 +24,10 @@ function findWorkspaceRoot(start: string): string {
 }
 
 if (isProduction && DATABASE_URL) {
-  // PostgreSQL for production (Neon serverless - Edge/Cloudflare compatible)
-  const pool = new Pool({
-    connectionString: DATABASE_URL,
-  });
-
-  // Create tables if not exist
-  pool.query(`
-    CREATE TABLE IF NOT EXISTS click_logs (
-      id           SERIAL PRIMARY KEY,
-      offer_id     TEXT    NOT NULL,
-      clicked_at   TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-      ip           TEXT,
-      user_agent   TEXT,
-      referer      TEXT,
-      utm_source   TEXT,
-      utm_medium   TEXT,
-      utm_campaign TEXT,
-      utm_term     TEXT,
-      utm_content  TEXT
-    )
-  `);
-
-  pool.query(`
-    CREATE TABLE IF NOT EXISTS offers (
-      id          TEXT PRIMARY KEY,
-      name        TEXT NOT NULL,
-      url         TEXT NOT NULL,
-      description TEXT,
-      created_at  TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-      updated_at  TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-    )
-  `);
-
-  pool.query(`
-    CREATE TABLE IF NOT EXISTS lp_configs (
-      slug        TEXT PRIMARY KEY,
-      title       TEXT NOT NULL,
-      description TEXT,
-      config      TEXT NOT NULL,
-      target_audience TEXT,
-      offer_id    TEXT,
-      content     TEXT,
-      keywords    TEXT,
-      genre       TEXT,
-      created_at  TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-      updated_at  TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-    )
-  `);
-
-  pool.query(`
-    CREATE TABLE IF NOT EXISTS shindan_configs (
-      slug        TEXT PRIMARY KEY,
-      title       TEXT NOT NULL,
-      description TEXT,
-      config      TEXT NOT NULL,
-      created_at  TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-      updated_at  TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-    )
-  `);
-
-  pool.query(`
-    CREATE TABLE IF NOT EXISTS sns_accounts (
-      id                   SERIAL PRIMARY KEY,
-      platform             TEXT NOT NULL,
-      account_name         TEXT NOT NULL,
-      theme                TEXT,
-      character_name       TEXT,
-      character_role       TEXT,
-      character_bio        TEXT,
-      character_tone       TEXT,
-      post_format          TEXT,
-      cta_style            TEXT,
-      forbidden_expressions TEXT,
-      visual_direction     TEXT,
-      api_key              TEXT,
-      api_secret           TEXT,
-      access_token         TEXT,
-      access_secret        TEXT,
-      is_active            BOOLEAN DEFAULT true,
-      created_at           TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-      updated_at           TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-    )
-  `);
-
-  pool.query(`
-    CREATE TABLE IF NOT EXISTS sns_posts (
-      id          SERIAL PRIMARY KEY,
-      lp_slug     TEXT NOT NULL,
-      platform    TEXT NOT NULL,
-      post_id     TEXT,
-      content     TEXT NOT NULL,
-      success     BOOLEAN NOT NULL,
-      error_msg   TEXT,
-      created_at  TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-    )
-  `);
-
-  pool.query(`
-    CREATE TABLE IF NOT EXISTS genres (
-      id          SERIAL PRIMARY KEY,
-      slug        TEXT UNIQUE NOT NULL,
-      name        TEXT NOT NULL,
-      tone_prompt TEXT NOT NULL,
-      is_active   BOOLEAN DEFAULT true
-    )
-  `);
-
-  pool.query(`
-    CREATE TABLE IF NOT EXISTS post_queue (
-      id              SERIAL PRIMARY KEY,
-      lp_slug         TEXT NOT NULL,
-      sns_account_id  INTEGER NOT NULL,
-      body            TEXT NOT NULL,
-      scheduled_at    TEXT NOT NULL,
-      status          TEXT DEFAULT 'pending',
-      posted_tweet_id TEXT,
-      error           TEXT,
-      created_at      TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-    )
-  `);
-
-  pool.query(`
-    CREATE TABLE IF NOT EXISTS pipeline_runs (
-      id          SERIAL PRIMARY KEY,
-      kind        TEXT NOT NULL,
-      started_at  TEXT,
-      finished_at TEXT,
-      status      TEXT,
-      detail      TEXT
-    )
-  `);
-
-  // Additive columns (idempotent via IF NOT EXISTS)
-  pool.query(`ALTER TABLE offers ADD COLUMN IF NOT EXISTS genre_slug TEXT`);
-  pool.query(`ALTER TABLE offers ADD COLUMN IF NOT EXISTS source TEXT DEFAULT 'a8'`);
-  pool.query(`ALTER TABLE offers ADD COLUMN IF NOT EXISTS priority INTEGER DEFAULT 0`);
-  pool.query(`ALTER TABLE offers ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true`);
-  pool.query(`ALTER TABLE sns_accounts ADD COLUMN IF NOT EXISTS slug TEXT`);
-  pool.query(`ALTER TABLE sns_accounts ADD COLUMN IF NOT EXISTS genre_slug TEXT`);
-  pool.query(`ALTER TABLE sns_accounts ADD COLUMN IF NOT EXISTS daily_post_cap INTEGER DEFAULT 2`);
-  pool.query(`ALTER TABLE sns_accounts ADD COLUMN IF NOT EXISTS consecutive_failures INTEGER DEFAULT 0`);
-
-  db = pool;
+  // PostgreSQL for production via Neon HTTP. Do not keep a Pool/WebSocket at
+  // module scope in Cloudflare Workers; request-scoped I/O cannot be reused
+  // safely across requests. Schema changes belong in `pnpm migrate`.
+  db = neon(DATABASE_URL, { fullResults: true });
   isPostgres = true;
 } else {
   // SQLite for development (better-sqlite3 is loaded lazily to avoid import errors on Vercel)
@@ -361,7 +222,7 @@ async function pgQuery(sql: string, params: any[] = []) {
 
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
-      return await db.query(pgSql, params);
+      return await db(pgSql, params);
     } catch (error) {
       lastError = error;
       if (!isRetryablePgError(error) || attempt === 3) break;
