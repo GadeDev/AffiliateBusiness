@@ -346,11 +346,37 @@ function toPgSql(sql: string): string {
   return sql.replace(/\?/g, () => `$${++i}`);
 }
 
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isRetryablePgError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /fetch failed|timeout|503|502|504|ECONNRESET|connection|network|terminated/i.test(message);
+}
+
+async function pgQuery(sql: string, params: any[] = []) {
+  const pgSql = toPgSql(sql);
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      return await db.query(pgSql, params);
+    } catch (error) {
+      lastError = error;
+      if (!isRetryablePgError(error) || attempt === 3) break;
+      await wait(attempt * 150);
+    }
+  }
+
+  throw lastError;
+}
+
 // Unified query interface (use ? placeholders in all SQL)
 export const query = {
   all: async (sql: string, params: any[] = []) => {
     if (isPostgres) {
-      const res = await db.query(toPgSql(sql), params);
+      const res = await pgQuery(sql, params);
       return res.rows;
     } else {
       return db.prepare(sql).all(...params);
@@ -358,7 +384,7 @@ export const query = {
   },
   get: async (sql: string, params: any[] = []) => {
     if (isPostgres) {
-      const res = await db.query(toPgSql(sql), params);
+      const res = await pgQuery(sql, params);
       return res.rows[0] || null;
     } else {
       return db.prepare(sql).get(...params);
@@ -366,7 +392,7 @@ export const query = {
   },
   run: async (sql: string, params: any[] = []) => {
     if (isPostgres) {
-      return await db.query(toPgSql(sql), params);
+      return await pgQuery(sql, params);
     } else {
       return db.prepare(sql).run(...params);
     }
