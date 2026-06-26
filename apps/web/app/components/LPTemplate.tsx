@@ -24,6 +24,33 @@ function isFinancialLP(config: LPConfig, content: any): boolean {
   ].some((term) => text.includes(term.toLowerCase()));
 }
 
+function isInsuranceLP(config: LPConfig, content: any): boolean {
+  const sectionText = Array.isArray(content?.sections)
+    ? content.sections.flatMap((section: any) => [section?.title, section?.content, section?.cta])
+    : [];
+  const text = [
+    config.genre,
+    config.title,
+    config.description,
+    content?.title,
+    content?.headline,
+    content?.subheadline,
+    ...sectionText,
+  ].filter(Boolean).join(' ').toLowerCase();
+
+  return [
+    '保険',
+    '火災保険',
+    '地震保険',
+    '家財保険',
+    'インズウェブ',
+    'insweb',
+    '一括見積',
+    '見積もり',
+    '補償',
+  ].some((term) => text.includes(term.toLowerCase()));
+}
+
 export function LPTemplate({ config }: { config: LPConfig }) {
   const ctaUrl = (position: string) =>
     `/go/${config.hero?.offer_id || config.content?.offerId}?utm_source=lp&utm_medium=${position}&utm_campaign=${config.slug}`;
@@ -33,30 +60,63 @@ export function LPTemplate({ config }: { config: LPConfig }) {
     const content = config.content;
     const sections = content.sections || [];
     const isFinancial = isFinancialLP(config, content);
-    const heroCta = isFinancial ? '公式サイトで詳細を確認する' : '今すぐ申し込む';
+    const isInsurance = !isFinancial && isInsuranceLP(config, content);
+    const heroCta = isFinancial
+      ? '公式サイトで詳細を確認する'
+      : isInsurance
+        ? '公式サイトで見積もり条件を確認する'
+        : '今すぐ申し込む';
     const heroNote = isFinancial
       ? '※ FXは元本や利益が保証されず、預託証拠金を上回る損失が生じるおそれがあります。'
+      : isInsurance
+        ? '※ 見積もり結果や保険料・補償内容は条件や保険会社により異なります。契約前に重要事項説明書等をご確認ください。'
       : '※ 無料・登録30秒';
     const trustItems = isFinancial
       ? ['リスク説明を確認', '手数料・スプレッドを確認', '無理のない取引判断']
+      : isInsurance
+        ? ['補償内容を比較', '保険料の条件を確認', '公式情報で判断']
       : ['完全無料', '登録かんたん30秒', '退会自由'];
-    const stepsTitle = isFinancial ? '確認して進める3ステップ' : 'かんたん3ステップ';
-    const stepsDescription = isFinancial ? '条件とリスクを確認してから判断できます' : 'お申し込みはとってもシンプル';
+    const stepsTitle = isFinancial
+      ? '確認して進める3ステップ'
+      : isInsurance
+        ? '比較して選ぶ3ステップ'
+        : 'かんたん3ステップ';
+    const stepsDescription = isFinancial
+      ? '条件とリスクを確認してから判断できます'
+      : isInsurance
+        ? '住まいの条件と補償内容を整理してから見積もりできます'
+        : 'お申し込みはとってもシンプル';
     const steps = isFinancial
       ? [
           { step: '01', title: 'リスクを確認', desc: '元本割れや証拠金以上の損失リスクを確認', color: 'from-blue-500 to-blue-700' },
           { step: '02', title: '条件を比較', desc: '手数料・スプレッド・成果条件を確認', color: 'from-indigo-500 to-indigo-700' },
           { step: '03', title: '納得して判断', desc: '公式サイトの最新条件を見て判断', color: 'from-purple-500 to-purple-700' },
         ]
+      : isInsurance
+        ? [
+            { step: '01', title: '条件を整理', desc: '所在地・構造・築年数・補償対象を確認', color: 'from-blue-500 to-blue-700' },
+            { step: '02', title: '補償を比較', desc: '保険料だけでなく補償範囲も比較', color: 'from-indigo-500 to-indigo-700' },
+            { step: '03', title: '公式条件を確認', desc: '重要事項説明書や約款を見て判断', color: 'from-purple-500 to-purple-700' },
+          ]
       : [
           { step: '01', title: '無料登録', desc: 'まずは30秒でかんたん登録', color: 'from-blue-500 to-blue-700' },
           { step: '02', title: '情報入力', desc: 'あなたに合ったプランを診断', color: 'from-indigo-500 to-indigo-700' },
           { step: '03', title: '利用開始', desc: 'すぐにサービスを利用可能', color: 'from-purple-500 to-purple-700' },
         ];
-    const footerTitle = isFinancial ? 'リスクと条件を確認して判断しましょう' : '今すぐ始めましょう';
-    const footerCta = isFinancial ? '公式サイトで詳細を確認する' : '無料で始める';
+    const footerTitle = isFinancial
+      ? 'リスクと条件を確認して判断しましょう'
+      : isInsurance
+        ? '補償内容と保険料を比較して判断しましょう'
+        : '今すぐ始めましょう';
+    const footerCta = isFinancial
+      ? '公式サイトで詳細を確認する'
+      : isInsurance
+        ? '公式サイトで見積もり条件を確認する'
+        : '無料で始める';
     const footerNote = isFinancial
       ? '※ 本ページは広告を含みます。投資判断はご自身の責任で行ってください。'
+      : isInsurance
+        ? '※ 本ページは広告を含みます。保険契約前に公式情報・重要事項説明書をご確認ください。'
       : '※ 費用は一切かかりません';
 
     return (

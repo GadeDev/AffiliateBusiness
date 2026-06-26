@@ -48,6 +48,27 @@ function isFinancialOffer(request: LPGenerationRequest): boolean {
   ].some((term) => text.includes(term.toLowerCase()));
 }
 
+function isInsuranceOffer(request: LPGenerationRequest): boolean {
+  const text = [
+    request.title,
+    request.description,
+    request.targetAudience,
+    ...request.keywords,
+  ].join(' ').toLowerCase();
+
+  return [
+    '保険',
+    '火災保険',
+    '地震保険',
+    '家財保険',
+    'インズウェブ',
+    'insweb',
+    '見積もり',
+    '一括見積',
+    '補償',
+  ].some((term) => text.includes(term.toLowerCase()));
+}
+
 function financialGuardrails(request: LPGenerationRequest): string {
   if (!isFinancialOffer(request)) return '';
 
@@ -59,6 +80,19 @@ function financialGuardrails(request: LPGenerationRequest): string {
 - 手数料、スプレッド、キャンペーン、口座開設条件、成果条件は変更される可能性があるため、公式サイトで最新条件を確認する導線にする
 - CTAは「公式サイトで詳細を確認する」「リスクと条件を確認する」など確認型にし、「今すぐ稼ぐ」「絶対に得する」等の煽りは禁止
 - 読者が仕組みとリスクを理解して判断できる、落ち着いた情報提供型のLPにする`;
+}
+
+function insuranceGuardrails(request: LPGenerationRequest): string {
+  if (!isInsuranceOffer(request)) return '';
+
+  return `
+
+保険・一括見積もり案件の必須ルール:
+- 必ず安くなる、最安保証、誰でも得する、絶対におすすめ、必ず補償される等の断定は禁止
+- 火災保険の保険料や補償内容は、所在地、建物構造、築年数、補償対象、補償範囲、保険金額、保険期間、自己負担額、保険会社によって異なることを明記
+- 一括見積もりは比較検討の入口であり、契約条件・補償範囲・免責事項・重要事項説明書は公式サイトや保険会社資料で確認する導線にする
+- CTAは「公式サイトで見積もり条件を確認する」「補償内容を比較する」など確認型にする
+- 不安を煽りすぎず、補償範囲と保険料を落ち着いて比較できる情報提供型のLPにする`;
 }
 
 function normalizeFinancialCta(cta?: string): string | undefined {
@@ -97,6 +131,50 @@ function ensureFinancialRiskCopy(content: LPContent): LPContent {
   const footer = /(元本|損失|リスク|証拠金)/.test(content.footer)
     ? content.footer
     : `${content.footer}\n${riskNotice}`;
+
+  return {
+    ...content,
+    sections: normalizedSections,
+    footer,
+  };
+}
+
+function normalizeInsuranceCta(cta?: string): string | undefined {
+  if (!cta) return undefined;
+  if (/(申し込|始め|登録|今すぐ|最安|必ず|無料)/.test(cta)) {
+    return '公式サイトで見積もり条件を確認する';
+  }
+  return cta;
+}
+
+function ensureInsuranceNoticeCopy(content: LPContent): LPContent {
+  const notice =
+    '火災保険の保険料や補償内容は、所在地、建物構造、築年数、補償対象、補償範囲、保険金額、保険期間、自己負担額、保険会社によって異なります。一括見積もりは比較検討の入口として活用し、契約前には公式サイトや保険会社の重要事項説明書・約款を必ず確認してください。';
+
+  const sections = Array.isArray(content.sections) ? content.sections : [];
+  const normalizedSections = sections.map((section) => ({
+    ...section,
+    cta: normalizeInsuranceCta(section.cta),
+  }));
+  const allText = [
+    content.title,
+    content.headline,
+    content.subheadline,
+    content.footer,
+    ...normalizedSections.flatMap((section) => [section.title, section.content]),
+  ].join('\n');
+
+  if (!/(補償|保険料|重要事項|約款|条件)/.test(allText)) {
+    normalizedSections.push({
+      title: '見積もり前に確認したいこと',
+      content: notice,
+      cta: '公式サイトで見積もり条件を確認する',
+    });
+  }
+
+  const footer = /(補償|保険料|重要事項|約款|条件)/.test(content.footer)
+    ? content.footer
+    : `${content.footer}\n${notice}`;
 
   return {
     ...content,
@@ -208,6 +286,7 @@ export async function generateLPContent(request: LPGenerationRequest): Promise<L
 - ターゲット: ${request.targetAudience}
 - キーワード: ${request.keywords.join(', ')}
 ${financialGuardrails(request)}
+${insuranceGuardrails(request)}
 
 以下の**正確なJSON構造**で返してください。余計なキーやネストは絶対に追加しないでください。contentは必ず文字列（配列やオブジェクトではなく）にしてください。
 
@@ -270,7 +349,9 @@ ${financialGuardrails(request)}
       }));
     }
     const normalized = parsed as LPContent;
-    return isFinancialOffer(request) ? ensureFinancialRiskCopy(normalized) : normalized;
+    if (isFinancialOffer(request)) return ensureFinancialRiskCopy(normalized);
+    if (isInsuranceOffer(request)) return ensureInsuranceNoticeCopy(normalized);
+    return normalized;
   } catch (error) {
     throw new Error('Failed to parse Claude response as JSON');
   }
