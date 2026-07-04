@@ -114,12 +114,17 @@ pnpm cli offer:add \
 
 ### 4. SNSアカウント登録
 
+GitHub Actionsの `ops-x-bootstrap` を使うのが推奨です。5ジャンル分をまとめて準備し、Secretsが4点揃ったアカウントだけ有効化します。
+
+CLIで個別に登録・更新する場合:
+
 ```bash
-pnpm cli account:add \
+pnpm cli account:ensure \
   --slug career_scope_jp \
   --genre career \
   --platform twitter \
-  --daily-cap 2
+  --daily-cap 2 \
+  --active false
 ```
 
 ### 5. Secrets登録
@@ -144,6 +149,15 @@ GitHub Variablesには以下を登録します。
 WEB_BASE_URL=https://affiliate-web.yanagiho.workers.dev
 ```
 
+### 6. X接続確認
+
+Secrets登録後に、GitHub Actionsで以下を実行します。
+
+1. `ops-x-bootstrap`
+2. `ops-x-check`
+
+`ops-x-check` は投稿せず、X APIの認証だけ確認します。成功後に `pipeline-generate` と `pipeline-post` を手動実行すると、本番の自動投稿導線を確認できます。
+
 ## 障害対応
 
 ### LP生成が止まった
@@ -159,10 +173,11 @@ WEB_BASE_URL=https://affiliate-web.yanagiho.workers.dev
 
 確認するもの:
 
-1. Twitter Developer PortalのAPI権限
+1. X Developer PortalのAPI権限（Read and write）
 2. `TW_<SLUG>_*` の4キー
-3. `pnpm ops:status` の停止アカウント表示
-4. 3連続失敗で停止している場合、修正後に `pnpm cli account:enable <id>`
+3. GitHub Actionsの `ops-x-check`
+4. `pnpm ops:status` の停止アカウント表示
+5. 3連続失敗で停止している場合、修正後に `ops-x-bootstrap` を再実行する
 
 ### Slack通知が来ない
 
@@ -207,8 +222,9 @@ WEB_BASE_URL=https://affiliate-web.yanagiho.workers.dev
 
 ## 次の優先タスク
 
-1. GitHub Secrets / Variables の不足確認
-2. Xアカウント5件のDeveloper Portal承認
-3. 各ジャンルの有効オファー登録
-4. `pnpm ops:status` が重大NGなしになる状態まで整える
-5. GitHub Actionsを手動実行してSlack通知まで確認する
+1. Xアカウント5件のDeveloper Portal承認
+2. GitHub Secretsに `TW_<SLUG>_*` を登録
+3. `ops-x-bootstrap` → `ops-x-check` を実行
+4. 各ジャンルの有効オファー登録
+5. `ops-status` が重大NGなしになる状態まで整える
+6. `pipeline-generate` → `pipeline-post` を手動実行してSlack通知まで確認する

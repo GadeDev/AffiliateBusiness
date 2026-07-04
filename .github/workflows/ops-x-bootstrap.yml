@@ -1,0 +1,107 @@
+name: ops-x-bootstrap
+
+# Seeds the five planned X accounts. Accounts are activated only when all four
+# matching GitHub Secrets are present, so this workflow is safe to run before
+# credentials are ready.
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: ops-x-bootstrap
+  cancel-in-progress: false
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Prepare X accounts
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          TW_CAREER_SCOPE_JP_API_KEY: ${{ secrets.TW_CAREER_SCOPE_JP_API_KEY }}
+          TW_CAREER_SCOPE_JP_API_SECRET: ${{ secrets.TW_CAREER_SCOPE_JP_API_SECRET }}
+          TW_CAREER_SCOPE_JP_ACCESS_TOKEN: ${{ secrets.TW_CAREER_SCOPE_JP_ACCESS_TOKEN }}
+          TW_CAREER_SCOPE_JP_ACCESS_SECRET: ${{ secrets.TW_CAREER_SCOPE_JP_ACCESS_SECRET }}
+          TW_ASSET_BRIEF_JP_API_KEY: ${{ secrets.TW_ASSET_BRIEF_JP_API_KEY }}
+          TW_ASSET_BRIEF_JP_API_SECRET: ${{ secrets.TW_ASSET_BRIEF_JP_API_SECRET }}
+          TW_ASSET_BRIEF_JP_ACCESS_TOKEN: ${{ secrets.TW_ASSET_BRIEF_JP_ACCESS_TOKEN }}
+          TW_ASSET_BRIEF_JP_ACCESS_SECRET: ${{ secrets.TW_ASSET_BRIEF_JP_ACCESS_SECRET }}
+          TW_KAKEI_RESET_NOTE_API_KEY: ${{ secrets.TW_KAKEI_RESET_NOTE_API_KEY }}
+          TW_KAKEI_RESET_NOTE_API_SECRET: ${{ secrets.TW_KAKEI_RESET_NOTE_API_SECRET }}
+          TW_KAKEI_RESET_NOTE_ACCESS_TOKEN: ${{ secrets.TW_KAKEI_RESET_NOTE_ACCESS_TOKEN }}
+          TW_KAKEI_RESET_NOTE_ACCESS_SECRET: ${{ secrets.TW_KAKEI_RESET_NOTE_ACCESS_SECRET }}
+          TW_LOVE_SIGNAL_EDIT_API_KEY: ${{ secrets.TW_LOVE_SIGNAL_EDIT_API_KEY }}
+          TW_LOVE_SIGNAL_EDIT_API_SECRET: ${{ secrets.TW_LOVE_SIGNAL_EDIT_API_SECRET }}
+          TW_LOVE_SIGNAL_EDIT_ACCESS_TOKEN: ${{ secrets.TW_LOVE_SIGNAL_EDIT_ACCESS_TOKEN }}
+          TW_LOVE_SIGNAL_EDIT_ACCESS_SECRET: ${{ secrets.TW_LOVE_SIGNAL_EDIT_ACCESS_SECRET }}
+          TW_BASEBALL_POINT_JP_API_KEY: ${{ secrets.TW_BASEBALL_POINT_JP_API_KEY }}
+          TW_BASEBALL_POINT_JP_API_SECRET: ${{ secrets.TW_BASEBALL_POINT_JP_API_SECRET }}
+          TW_BASEBALL_POINT_JP_ACCESS_TOKEN: ${{ secrets.TW_BASEBALL_POINT_JP_ACCESS_TOKEN }}
+          TW_BASEBALL_POINT_JP_ACCESS_SECRET: ${{ secrets.TW_BASEBALL_POINT_JP_ACCESS_SECRET }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm migrate
+          pnpm cli genre:seed
+
+          has_all_keys() {
+            local prefix="$1"
+            local key="${prefix}_API_KEY"
+            local secret="${prefix}_API_SECRET"
+            local token="${prefix}_ACCESS_TOKEN"
+            local access_secret="${prefix}_ACCESS_SECRET"
+            [[ -n "${!key:-}" && -n "${!secret:-}" && -n "${!token:-}" && -n "${!access_secret:-}" ]]
+          }
+
+          ensure_account() {
+            local slug="$1"
+            local genre="$2"
+            local name="$3"
+            local prefix="$4"
+            local active=false
+            if has_all_keys "$prefix"; then
+              active=true
+            fi
+            pnpm cli account:ensure \
+              --slug "$slug" \
+              --genre "$genre" \
+              --name "$name" \
+              --platform twitter \
+              --daily-cap 2 \
+              --active "$active"
+          }
+
+          ensure_account career_scope_jp career "キャリスコ編集部" TW_CAREER_SCOPE_JP
+          ensure_account asset_brief_jp investment "アセット速報室" TW_ASSET_BRIEF_JP
+          ensure_account kakei_reset_note household "家計リセット編集室" TW_KAKEI_RESET_NOTE
+          ensure_account love_signal_edit love "恋愛シグナル編集部" TW_LOVE_SIGNAL_EDIT
+          ensure_account baseball_point_jp baseball "野球観戦ポイント室" TW_BASEBALL_POINT_JP
+
+      - name: Notify Slack
+        if: success()
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          if [ -n "$SLACK_WEBHOOK_URL" ]; then
+            curl -s -X POST -H 'Content-type: application/json' \
+              --data '{"text":"AffiliateBusiness: Xアカウント準備が完了しました。Secretsが揃ったアカウントだけ有効化されています。"}' \
+              "$SLACK_WEBHOOK_URL"
+          fi
+      - name: Notify Slack on failure
+        if: failure()
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          if [ -n "$SLACK_WEBHOOK_URL" ]; then
+            curl -s -X POST -H 'Content-type: application/json' \
+              --data "{\"text\":\"🚨 ops-x-bootstrap failed (run ${GITHUB_RUN_ID})\"}" \
+              "$SLACK_WEBHOOK_URL"
+          fi

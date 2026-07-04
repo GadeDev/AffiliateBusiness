@@ -105,6 +105,27 @@ Xアカウントのslug例:
 | 恋愛 | `LOVE_SIGNAL_EDIT` |
 | 野球 | `BASEBALL_POINT_JP` |
 
+### X自動投稿を有効化する最短手順
+
+GitHubのActions画面から、以下の順で実行します。
+
+1. `ops-x-bootstrap`
+   - 5ジャンル分のXアカウント設定をDBに作成します。
+   - X用Secretsが未登録のアカウントは自動で停止状態にするため、先に実行しても安全です。
+2. GitHub Secretsに各Xアカウントの4キーを登録
+   - `TW_<SLUG>_API_KEY`
+   - `TW_<SLUG>_API_SECRET`
+   - `TW_<SLUG>_ACCESS_TOKEN`
+   - `TW_<SLUG>_ACCESS_SECRET`
+3. もう一度 `ops-x-bootstrap`
+   - 4キーが揃ったアカウントだけ有効化します。
+4. `ops-x-check`
+   - 投稿せず、X認証だけ確認します。
+5. `pipeline-generate` → `pipeline-post`
+   - LP生成、投稿キュー作成、X投稿までの本番導線を手動確認します。
+
+X投稿にはユーザー文脈の認証が必要です。Developer Portalでは、対象アプリをRead and write権限にし、各XアカウントのAccess Token / Access Secretを発行してください。
+
 ## 管理コマンド
 
 非エンジニア運用では、直接実行せずCodexに依頼する運用で問題ありません。
@@ -115,6 +136,7 @@ pnpm cli genre:seed
 pnpm cli offer:list
 pnpm cli account:list
 pnpm ops:status
+pnpm ops:x-check
 ```
 
 オファー追加例:
@@ -130,7 +152,7 @@ pnpm cli offer:add \
 アカウント有効化例:
 
 ```bash
-pnpm cli account:enable 1
+pnpm cli account:ensure --slug career_scope_jp --active true
 ```
 
 ## 自動運用の安全ルール

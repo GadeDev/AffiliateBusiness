@@ -76,6 +76,31 @@ async function main(): Promise<void> {
   `);
   console.log('[migrate] pipeline_runs ready');
 
+  await query.run(`
+    CREATE TABLE IF NOT EXISTS sns_accounts (
+      id                    ${pk},
+      platform              TEXT NOT NULL,
+      account_name          TEXT NOT NULL,
+      theme                 TEXT,
+      character_name        TEXT,
+      character_role        TEXT,
+      character_bio         TEXT,
+      character_tone        TEXT,
+      post_format           TEXT,
+      cta_style             TEXT,
+      forbidden_expressions TEXT,
+      visual_direction      TEXT,
+      api_key               TEXT,
+      api_secret            TEXT,
+      access_token          TEXT,
+      access_secret         TEXT,
+      is_active             ${boolTrue},
+      created_at            ${tsDefault},
+      updated_at            ${tsDefault}
+    )
+  `);
+  console.log('[migrate] sns_accounts ready');
+
   await addColumn('offers', `genre_slug TEXT`);
   await addColumn('offers', `source TEXT DEFAULT 'a8'`);
   await addColumn('offers', `priority INTEGER DEFAULT 0`);

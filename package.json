@@ -14,6 +14,7 @@
     "pipeline:report-weekly": "tsx pipeline/report-weekly.ts",
     "ops:lp-generate": "tsx scripts/generate-lp-once.ts",
     "ops:status": "tsx scripts/ops-status.ts",
+    "ops:x-check": "tsx scripts/x-credentials-check.ts",
     "seed-demo": "tsx scripts/seed-demo.ts"
   },
   "devDependencies": {
