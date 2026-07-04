@@ -9,6 +9,7 @@
  *   offer:disable <id> | offer:enable <id>
  *   account:add --slug --genre [--platform twitter] [--name] [--daily-cap 2]
  *   account:ensure --slug --genre [--platform twitter] [--name] [--daily-cap 2] [--active true|false]
+ *   account:disable-legacy-twitter
  *   account:list
  *   account:enable <id> | account:disable <id>
  *
@@ -96,6 +97,7 @@ const ACCOUNT_TEMPLATES: Record<
     visual_direction: '球場、スコア、濃緑、白、黄色アクセント',
   },
 };
+const EXPECTED_X_SLUGS = Object.keys(ACCOUNT_TEMPLATES);
 
 /** Bind a boolean portably: Postgres wants a real boolean, SQLite wants 0/1. */
 function bool(v: boolean): boolean | number {
@@ -399,6 +401,19 @@ async function accountList(): Promise<void> {
   }
 }
 
+async function accountDisableLegacyTwitter(): Promise<void> {
+  const placeholders = EXPECTED_X_SLUGS.map(() => '?').join(', ');
+  const res: any = await query.run(
+    `UPDATE sns_accounts
+     SET is_active = ?
+     WHERE platform = 'twitter'
+       AND (slug IS NULL OR slug = '' OR slug NOT IN (${placeholders}))`,
+    [bool(false), ...EXPECTED_X_SLUGS]
+  );
+  const changed = isPg ? res?.rowCount : res?.changes;
+  console.log(`disabled legacy twitter accounts: ${changed ?? 0}`);
+}
+
 async function accountSetActive(id: string, active: boolean): Promise<void> {
   const failReset = active ? `, consecutive_failures = 0` : '';
   const res: any = await query.run(
@@ -423,6 +438,7 @@ function usage(): void {
   offer:enable <id>
   account:add --slug <s> --genre <g> [--platform twitter] [--name <n>] [--daily-cap 2]
   account:ensure --slug <s> [--genre <g>] [--platform twitter] [--name <n>] [--daily-cap 2] [--active true|false]
+  account:disable-legacy-twitter
   account:list
   account:enable <id>
   account:disable <id>`);
@@ -456,6 +472,9 @@ async function main(): Promise<void> {
       break;
     case 'account:list':
       await accountList();
+      break;
+    case 'account:disable-legacy-twitter':
+      await accountDisableLegacyTwitter();
       break;
     case 'account:enable':
       await accountSetActive(positional[0], true);

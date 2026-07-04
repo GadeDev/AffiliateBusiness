@@ -51,6 +51,7 @@ jobs:
           set -euo pipefail
           pnpm migrate
           pnpm cli genre:seed
+          pnpm cli account:disable-legacy-twitter
 
           has_all_keys() {
             local prefix="$1"
