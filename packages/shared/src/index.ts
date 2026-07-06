@@ -12,6 +12,7 @@ export type {
   Genre,
   PostQueueItem,
   PipelineRun,
+  NewsItem,
 } from './types';
 
 export { extractUTMParams, buildUrlWithUTM } from './utils';

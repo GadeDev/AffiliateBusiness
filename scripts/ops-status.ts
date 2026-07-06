@@ -125,7 +125,7 @@ async function main(): Promise<void> {
   console.log('');
   console.log('データ件数');
   console.log(`- genres: ${await count('genres')} / offers: ${await count('offers')} / LP: ${await count('lp_configs')}`);
-  console.log(`- SNS accounts: ${await count('sns_accounts')} / queue: ${await count('post_queue')} / clicks: ${await count('click_logs')}`);
+  console.log(`- SNS accounts: ${await count('sns_accounts')} / queue: ${await count('post_queue')} / news: ${await count('news_items')} / clicks: ${await count('click_logs')}`);
 
   console.log('');
   console.log('ジャンル別の運用準備');

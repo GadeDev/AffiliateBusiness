@@ -15,6 +15,7 @@
     "ops:lp-generate": "tsx scripts/generate-lp-once.ts",
     "ops:status": "tsx scripts/ops-status.ts",
     "ops:x-check": "tsx scripts/x-credentials-check.ts",
+    "pipeline:news": "tsx pipeline/news.ts",
     "seed-demo": "tsx scripts/seed-demo.ts"
   },
   "devDependencies": {
@@ -23,6 +24,7 @@
     "typescript": "^5.7.2"
   },
   "dependencies": {
-    "dotenv": "^17.4.2"
+    "dotenv": "^17.4.2",
+    "fast-xml-parser": "^5.5.8"
   }
 }

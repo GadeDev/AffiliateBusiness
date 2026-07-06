@@ -10,6 +10,7 @@
 |---|---|---|
 | LP企画 | Claudeがジャンル別に企画 | クライアント方針とズレていないか |
 | LP生成 | Claudeが本文生成、DB保存 | 週次で上位LPを確認 |
+| ニュース反応 | RSSの見出しから独自コメントを生成 | 配信元が不適切でないか |
 | X投稿 | キューから自動投稿 | 失敗/停止通知がないか |
 | 計測 | クリックログを自動集計 | Slackレポートを見る |
 | 改善提案 | 週次でClaudeが提案 | クライアント報告に使う |
@@ -22,6 +23,8 @@ GitHub Actionsで実行します。
 |---|---|---|
 | 05:00 毎日 | `pipeline-generate.yml` | LP企画、LP生成、投稿キュー作成 |
 | 06:00 毎日 | `pipeline-post.yml` | 朝投稿 |
+| 12:00 毎日 | `pipeline-news.yml` | ジャンル別ニュースコメントを投稿キュー作成 |
+| 12:15 毎日 | `pipeline-post.yml` | ニュースコメント投稿 |
 | 20:00 毎日 | `pipeline-post.yml` | 夜投稿 |
 | 21:00 毎日 | `report-daily.yml` | 日次Slackレポート |
 | 08:00 月曜 | `report-weekly.yml` | 週次Slackレポート |
@@ -158,6 +161,34 @@ Secrets登録後に、GitHub Actionsで以下を実行します。
 
 `ops-x-check` は投稿せず、X APIの認証だけ確認します。成功後に `pipeline-generate` と `pipeline-post` を手動実行すると、本番の自動投稿導線を確認できます。
 
+### 7. ニュースコメント自動投稿
+
+昼の投稿は `pipeline-news.yml` がRSSから候補を集め、`pipeline-post.yml` が投稿します。
+
+デフォルトでは以下を参照します。
+
+| 配信元 | 用途 |
+|---|---|
+| PR TIMES | 企業発表、サービス、消費者向けトピック |
+| NHKニュース | 社会・経済・スポーツなどの一般ニュース |
+
+ニュース投稿は記事本文を取得しません。RSSのタイトル・配信元・URLから、各Xアカウントのジャンルに合う独自コメントを作ります。
+
+配信元を増やしたい場合は、GitHub Variables に `NEWS_FEEDS_JSON` を登録します。
+
+```json
+[
+  {
+    "url": "https://example.com/rss.xml",
+    "source": "Example News",
+    "genres": ["investment", "household"],
+    "keywords": ["投資", "保険"]
+  }
+]
+```
+
+初回確認だけ行いたい場合は、GitHub Actionsで `pipeline-news` を開き、`dry_run` をオンにして実行します。dry runではDBに書き込まず、投稿もされません。
+
 ## 障害対応
 
 ### LP生成が止まった
@@ -217,6 +248,7 @@ Secrets登録後に、GitHub Actionsで以下を実行します。
 
 - A8.netなどASP管理画面への自動ログイン
 - Xの非公式API、スクレイピング、自動フォロー/RT/リプライ
+- ニュース記事本文の転載やスクレイピング
 - 同じ投稿文の複数アカウント同時投稿
 - アフィリエイト案件の自動提携申請
 

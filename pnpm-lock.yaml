@@ -11,6 +11,9 @@ importers:
       dotenv:
         specifier: ^17.4.2
         version: 17.4.2
+      fast-xml-parser:
+        specifier: ^5.5.8
+        version: 5.5.8
     devDependencies:
       tsx:
         specifier: ^4.22.4

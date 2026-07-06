@@ -31,11 +31,22 @@ export interface PostQueueItem {
 
 export interface PipelineRun {
   id: number;
-  kind: 'generate' | 'post' | 'report';
+  kind: 'generate' | 'post' | 'report' | 'news';
   started_at?: string | null;
   finished_at?: string | null;
   status?: 'success' | 'partial' | 'failed' | null;
   detail?: string | null;
+}
+
+export interface NewsItem {
+  id: number;
+  genre_slug: string;
+  title: string;
+  url: string;
+  source?: string | null;
+  published_at?: string | null;
+  queued_at?: string | null;
+  created_at?: string;
 }
 
 export interface ClickLog {

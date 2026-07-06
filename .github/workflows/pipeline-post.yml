@@ -1,9 +1,11 @@
 name: pipeline-post
 
-# 06:00 JST = 21:00 UTC (prev day) / 20:00 JST = 11:00 UTC. Posts due queue items.
+# 06:00 JST = 21:00 UTC (prev day) / 12:15 JST = 03:15 UTC /
+# 20:00 JST = 11:00 UTC. Posts due queue items.
 on:
   schedule:
     - cron: '0 21 * * *'
+    - cron: '15 3 * * *'
     - cron: '0 11 * * *'
   workflow_dispatch:
 

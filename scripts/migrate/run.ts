@@ -77,6 +77,22 @@ async function main(): Promise<void> {
   console.log('[migrate] pipeline_runs ready');
 
   await query.run(`
+    CREATE TABLE IF NOT EXISTS news_items (
+      id           ${pk},
+      genre_slug   TEXT NOT NULL,
+      title        TEXT NOT NULL,
+      url          TEXT NOT NULL,
+      source       TEXT,
+      published_at TEXT,
+      queued_at    TEXT,
+      created_at   ${tsDefault}
+    )
+  `);
+  await query.run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_news_items_url ON news_items(url)`);
+  await query.run(`CREATE INDEX IF NOT EXISTS idx_news_items_genre ON news_items(genre_slug)`);
+  console.log('[migrate] news_items ready');
+
+  await query.run(`
     CREATE TABLE IF NOT EXISTS sns_accounts (
       id                    ${pk},
       platform              TEXT NOT NULL,
