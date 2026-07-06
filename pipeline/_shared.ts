@@ -9,7 +9,7 @@ export const WEB_BASE_URL =
   process.env.NEXT_PUBLIC_BASE_URL ||
   'https://affiliate-web.yanagiho.workers.dev';
 
-export type PipelineKind = 'generate' | 'post' | 'report';
+export type PipelineKind = 'generate' | 'post' | 'report' | 'news';
 
 /** Has a successful run of this kind already happened today (JST)? Used for idempotency. */
 export async function hasSucceededToday(kind: PipelineKind): Promise<boolean> {

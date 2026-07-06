@@ -76,7 +76,7 @@ jobs:
               --genre "$genre" \
               --name "$name" \
               --platform twitter \
-              --daily-cap 2 \
+              --daily-cap 3 \
               --active "$active"
           }
 

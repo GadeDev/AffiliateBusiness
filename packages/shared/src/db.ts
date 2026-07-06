@@ -183,6 +183,21 @@ if (isProduction && DATABASE_URL) {
     )
   `);
 
+  sqliteDb.exec(`
+    CREATE TABLE IF NOT EXISTS news_items (
+      id           INTEGER PRIMARY KEY AUTOINCREMENT,
+      genre_slug   TEXT NOT NULL,
+      title        TEXT NOT NULL,
+      url          TEXT NOT NULL,
+      source       TEXT,
+      published_at TEXT,
+      queued_at    TEXT,
+      created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+    )
+  `);
+  sqliteDb.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_news_items_url ON news_items(url)`);
+  sqliteDb.exec(`CREATE INDEX IF NOT EXISTS idx_news_items_genre ON news_items(genre_slug)`);
+
   // Additive columns (ignore errors if column already exists)
   for (const stmt of [
     `ALTER TABLE offers ADD COLUMN genre_slug TEXT`,

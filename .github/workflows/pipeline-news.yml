@@ -1,0 +1,55 @@
+name: pipeline-news
+
+# 12:00 JST = 03:00 UTC. Finds genre-matched RSS news and queues original X comments.
+on:
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Generate/log candidates without writing to DB
+        required: false
+        default: false
+        type: boolean
+      force:
+        description: Ignore same-day idempotency
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: pipeline-news
+  cancel-in-progress: false
+
+jobs:
+  news:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Queue news comments
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          NEWS_FEEDS_JSON: ${{ vars.NEWS_FEEDS_JSON }}
+          NEWS_DRY_RUN: ${{ inputs.dry_run }}
+          NEWS_FORCE: ${{ inputs.force }}
+        run: pnpm pipeline:news
+      - name: Notify Slack on failure
+        if: failure()
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          if [ -n "$SLACK_WEBHOOK_URL" ]; then
+            curl -s -X POST -H 'Content-type: application/json' \
+              --data "{\"text\":\"🚨 pipeline-news failed (run ${GITHUB_RUN_ID})\"}" \
+              "$SLACK_WEBHOOK_URL"
+          fi
