@@ -1,0 +1,104 @@
+name: ops-x-account-set
+
+# Manually enable or disable one planned X account by slug. This avoids running
+# the full bootstrap when only one account needs to be paused or restored.
+on:
+  workflow_dispatch:
+    inputs:
+      slug:
+        description: X account slug
+        required: true
+        type: choice
+        options:
+          - career_scope_jp
+          - asset_brief_jp
+          - kakei_reset_note
+          - love_signal_edit
+          - baseball_point_jp
+      active:
+        description: Enable this account?
+        required: true
+        type: boolean
+        default: false
+
+concurrency:
+  group: ops-x-account-set-${{ inputs.slug }}
+  cancel-in-progress: false
+
+jobs:
+  set-account:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Set one X account
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          SLUG: ${{ inputs.slug }}
+          ACTIVE: ${{ inputs.active }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          case "$SLUG" in
+            career_scope_jp)
+              genre=career
+              name="キャリスコ編集部"
+              ;;
+            asset_brief_jp)
+              genre=investment
+              name="アセット速報室"
+              ;;
+            kakei_reset_note)
+              genre=household
+              name="家計リセット編集室"
+              ;;
+            love_signal_edit)
+              genre=love
+              name="恋愛シグナル編集部"
+              ;;
+            baseball_point_jp)
+              genre=baseball
+              name="野球観戦ポイント室"
+              ;;
+            *)
+              echo "unknown slug: $SLUG" >&2
+              exit 1
+              ;;
+          esac
+
+          pnpm cli account:ensure \
+            --slug "$SLUG" \
+            --genre "$genre" \
+            --name "$name" \
+            --platform twitter \
+            --daily-cap 3 \
+            --active "$ACTIVE"
+          pnpm cli account:list
+      - name: Notify Slack
+        if: success()
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          if [ -n "$SLACK_WEBHOOK_URL" ]; then
+            curl -s -X POST -H 'Content-type: application/json' \
+              --data "{\"text\":\"AffiliateBusiness: Xアカウント ${{ inputs.slug }} を active=${{ inputs.active }} にしました。\"}" \
+              "$SLACK_WEBHOOK_URL"
+          fi
+      - name: Notify Slack on failure
+        if: failure()
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          if [ -n "$SLACK_WEBHOOK_URL" ]; then
+            curl -s -X POST -H 'Content-type: application/json' \
+              --data "{\"text\":\"🚨 ops-x-account-set failed: ${{ inputs.slug }} (run ${GITHUB_RUN_ID})\"}" \
+              "$SLACK_WEBHOOK_URL"
+          fi
