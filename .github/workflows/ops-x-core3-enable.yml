@@ -1,0 +1,55 @@
+name: ops-x-core3-enable
+
+# Enables only the first three paid/updated X accounts and keeps the remaining
+# planned accounts inactive. Use this after rotating the OAuth 1.0a keys for:
+# career_scope_jp, asset_brief_jp, and kakei_reset_note.
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: ops-x-core3-enable
+  cancel-in-progress: false
+
+jobs:
+  enable-core3:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Enable only core three X accounts
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          pnpm cli account:ensure --slug career_scope_jp --genre career --name "キャリスコ編集部" --platform twitter --daily-cap 3 --active true
+          pnpm cli account:ensure --slug asset_brief_jp --genre investment --name "アセット速報室" --platform twitter --daily-cap 3 --active true
+          pnpm cli account:ensure --slug kakei_reset_note --genre household --name "家計リセット編集室" --platform twitter --daily-cap 3 --active true
+          pnpm cli account:ensure --slug love_signal_edit --genre love --name "恋愛シグナル編集部" --platform twitter --daily-cap 3 --active false
+          pnpm cli account:ensure --slug baseball_point_jp --genre baseball --name "野球観戦ポイント室" --platform twitter --daily-cap 3 --active false
+          pnpm cli account:list
+      - name: Notify Slack
+        if: success()
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          if [ -n "$SLACK_WEBHOOK_URL" ]; then
+            curl -s -X POST -H 'Content-type: application/json' \
+              --data '{"text":"AffiliateBusiness: Xアカウントをcore3のみ有効化しました（career / investment / household）。"}' \
+              "$SLACK_WEBHOOK_URL"
+          fi
+      - name: Notify Slack on failure
+        if: failure()
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          if [ -n "$SLACK_WEBHOOK_URL" ]; then
+            curl -s -X POST -H 'Content-type: application/json' \
+              --data "{\"text\":\"🚨 ops-x-core3-enable failed (run ${GITHUB_RUN_ID})\"}" \
+              "$SLACK_WEBHOOK_URL"
+          fi
