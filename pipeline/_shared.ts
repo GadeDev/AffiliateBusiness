@@ -15,10 +15,24 @@ export type PipelineKind = 'generate' | 'post' | 'report' | 'news';
 export async function hasSucceededToday(kind: PipelineKind): Promise<boolean> {
   const today = jstDateString();
   const rows = (await query.all(
-    `SELECT started_at, status FROM pipeline_runs WHERE kind = ? AND status = 'success'`,
+    `SELECT started_at, status, detail FROM pipeline_runs WHERE kind = ? AND status IN ('success', 'partial')`,
     [kind]
   )) as any[];
-  return rows.some((r) => typeof r.started_at === 'string' && jstDateString(new Date(r.started_at)) === today);
+  return rows.some((r) => {
+    if (typeof r.started_at !== 'string' || jstDateString(new Date(r.started_at)) !== today) return false;
+    if (r.status === 'success') return true;
+    return partialRunProducedOutput(r.detail);
+  });
+}
+
+function partialRunProducedOutput(detail: unknown): boolean {
+  if (typeof detail !== 'string') return false;
+  try {
+    const parsed = JSON.parse(detail) as Record<string, unknown>;
+    return ['lps', 'queued', 'posted'].some((key) => Number(parsed[key] ?? 0) > 0);
+  } catch {
+    return false;
+  }
 }
 
 export async function startRun(kind: PipelineKind): Promise<number> {
