@@ -1,5 +1,6 @@
 /**
- * Phase 2: batch generation pipeline. Runs once a day (05:00 JST via CI).
+ * Phase 2: cost-bounded batch generation pipeline. Runs once a week
+ * (Monday 05:00 JST via CI).
  *
  *   plan (Claude) -> generate LP (Claude) -> save -> queue morning/evening posts
  *
@@ -13,6 +14,7 @@
  */
 import { requireCiEnv } from './_env';
 import { isPg, WEB_BASE_URL, hasSucceededToday, startRun, finishRun } from './_shared';
+import { selectGenresForGeneration } from './generate-policy';
 import {
   query,
   generateLPPlans,
@@ -28,7 +30,15 @@ import {
 } from '@affiliate/shared';
 
 const MOCK = !!process.env.PIPELINE_MOCK;
-const PLANS_PER_GENRE = Number(process.env.PLANS_PER_GENRE || 1);
+
+function positiveInteger(value: string | undefined, fallback: number): number {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+const PLANS_PER_GENRE = positiveInteger(process.env.PLANS_PER_GENRE, 1);
+const MIN_ACTIVE_X_GENRES = positiveInteger(process.env.MIN_ACTIVE_X_GENRES, 3);
+const MAX_LPS_PER_RUN = positiveInteger(process.env.MAX_LPS_PER_RUN, 3);
 const SIMILARITY_THRESHOLD = Number(process.env.SIMILARITY_THRESHOLD || 0.6);
 const SIMILARITY_MAX_RETRIES = 2;
 
@@ -36,6 +46,7 @@ interface GenreRow {
   slug: string;
   name: string;
   tone_prompt: string;
+  latest_lp_at?: string | null;
 }
 interface OfferRow {
   id: string;
@@ -120,14 +131,51 @@ async function main(): Promise<void> {
   }
 
   const runId = await startRun('generate');
-  const summary = { genres: 0, lps: 0, queued: 0, skipped: 0, errors: [] as string[] };
+  const summary = {
+    activeXGenres: 0,
+    minActiveXGenres: MIN_ACTIVE_X_GENRES,
+    maxLpsPerRun: MAX_LPS_PER_RUN,
+    genres: 0,
+    lps: 0,
+    queued: 0,
+    skipped: 0,
+    reason: '',
+    errors: [] as string[],
+  };
 
   try {
-    const genres = (await query.all(
-      `SELECT slug, name, tone_prompt FROM genres WHERE is_active ${isPg ? '= true' : '= 1'}`
+    const candidates = (await query.all(
+      `SELECT g.slug, g.name, g.tone_prompt,
+              (SELECT MAX(lp.created_at) FROM lp_configs lp WHERE lp.genre = g.slug) AS latest_lp_at
+       FROM genres g
+       WHERE g.is_active ${isPg ? '= true' : '= 1'}
+         AND EXISTS (
+           SELECT 1 FROM sns_accounts sa
+           WHERE sa.genre_slug = g.slug
+             AND sa.is_active ${isPg ? '= true' : '= 1'}
+         )`
     )) as GenreRow[];
 
+    const selection = selectGenresForGeneration(candidates, MIN_ACTIVE_X_GENRES, MAX_LPS_PER_RUN);
+    summary.activeXGenres = selection.activeGenreCount;
+
+    if (!selection.shouldGenerate) {
+      summary.reason = `active X genres ${selection.activeGenreCount}/${MIN_ACTIVE_X_GENRES}; scheduled LP generation paused`;
+      await finishRun(runId, 'success', summary);
+      console.log(`[generate] ${summary.reason}`);
+      console.log('[generate] summary:', JSON.stringify(summary));
+      await postSlack(
+        `ℹ️ LP定期生成は停止を継続: 稼働Xジャンル ${selection.activeGenreCount}/${MIN_ACTIVE_X_GENRES}。` +
+        '既存LPを使用し、条件を満たすまで新規LPは作成しません。'
+      );
+      return;
+    }
+
+    const genres = selection.selected;
+    let generatedThisRun = 0;
+
     for (const genre of genres) {
+      if (generatedThisRun >= MAX_LPS_PER_RUN) break;
       summary.genres++;
       try {
         const offers = (await query.all(
@@ -145,9 +193,11 @@ async function main(): Promise<void> {
         const recentTitles = await recentLpTitles(genre.slug);
         const validOfferIds = new Set(offers.map((o) => o.id));
 
+        const remaining = MAX_LPS_PER_RUN - generatedThisRun;
+        const planCount = Math.min(PLANS_PER_GENRE, remaining);
         const plans: LPPlan[] = MOCK
-          ? Array.from({ length: PLANS_PER_GENRE }, () => mockPlan(genre, offers))
-          : await generateLPPlans(genre.name, genre.tone_prompt, offers, recentTitles, PLANS_PER_GENRE);
+          ? Array.from({ length: planCount }, () => mockPlan(genre, offers))
+          : await generateLPPlans(genre.name, genre.tone_prompt, offers, recentTitles, planCount);
 
         // The genre's dedicated account (1 account = 1 genre).
         const account = (await query.get(
@@ -156,6 +206,7 @@ async function main(): Promise<void> {
         )) as SNSAccount | null;
 
         for (const plan of plans) {
+          if (generatedThisRun >= MAX_LPS_PER_RUN) break;
           // Coerce an invalid offer_id back into the valid set.
           const offerId = validOfferIds.has(plan.offer_id) ? plan.offer_id : offers[0].id;
 
@@ -184,6 +235,7 @@ async function main(): Promise<void> {
             slug = res.slug;
           }
           summary.lps++;
+          generatedThisRun++;
           const lpUrl = `${WEB_BASE_URL}/lp/${slug}`;
           console.log(`[generate] LP created: ${lpUrl} (genre=${genre.slug})`);
 

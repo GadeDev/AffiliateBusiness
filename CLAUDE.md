@@ -252,7 +252,7 @@ ChatGPTで設計済み。5テーマ×2媒体=10アカウント。
 - ログイン画面からデフォルト認証情報の表示を削除済み
 - 本番パスワード変更済み（2026-04-09）: admin + hakamagi の2アカウント
 
-## プロジェクト状態（2026-07-06 時点）
+## プロジェクト状態（2026-07-14 時点）
 
 ✅ **GitHub Actions cron ベースの全自動化パイプライン実装済み**
 ✅ **CLI/DBスキーマ/マイグレーション実装済み**（`pnpm migrate`, `pnpm cli`）
@@ -265,6 +265,7 @@ ChatGPTで設計済み。5テーマ×2媒体=10アカウント。
 ✅ **ローカルSQLiteのDBパス誤参照を修正**（ルート実行でも `data/clicks.db` を見る）
 ✅ **GitHub Actionsの空回り成功を防止**（CIでは `DATABASE_URL` なしの一時SQLite実行を拒否）
 ✅ **README / docs/operations.md を受託運用向けに更新**
+✅ **LP生成費用ガード実装済み**（月曜週1回、稼働Xが3ジャンル未満なら停止、全体3本上限）
 
 ⚠️ **次に必要な作業（優先順）**
 1. GitHub Actions の `migrate` を実行し、`news_items` テーブルを本番DBへ反映
@@ -274,13 +275,13 @@ ChatGPTで設計済み。5テーマ×2媒体=10アカウント。
 5. 各ジャンルの有効オファー・RSS配信元を必要に応じて追加
 6. Instagram Graph API 対応（x6〜x10@gade.jp を使用予定）
 
-## GitHub Actions 自動運用（2026-07-06 更新）
+## GitHub Actions 自動運用（2026-07-14 更新）
 
 運用の詳細は `docs/operations.md` を参照。
 
 | タスク | 頻度 | 状態 | 備考 |
 |--------|------|------|------|
-| LP企画・生成・投稿キュー作成 | 毎日 05:00 JST | 実装済み | `pipeline-generate.yml` |
+| LP企画・生成・投稿キュー作成 | 月曜 05:00 JST | 実装済み | 稼働X 3ジャンル以上、全体3本上限 / `pipeline-generate.yml` |
 | ニュースコメントキュー作成 | 毎日 12:00 JST | 実装済み | `pipeline-news.yml` |
 | X投稿 | 毎日 06:00 / 12:15 / 20:00 JST | 実装済み | `pipeline-post.yml` |
 | 日次Slackレポート | 毎日 21:00 JST | 実装済み | `report-daily.yml` |
