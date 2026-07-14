@@ -20,13 +20,15 @@ GitHub Actions cron により、以下が自動実行されます。
 
 | 時刻 | 内容 | 実行ファイル |
 |---|---|---|
-| 毎日 05:00 JST | LP企画、LP生成、投稿キュー作成 | `pipeline/generate.ts` |
+| 毎週月曜 05:00 JST | 稼働Xが3ジャンル以上なら、合計3本までLP企画・生成・投稿キュー作成 | `pipeline/generate.ts` |
 | 毎日 06:00 / 12:15 / 20:00 JST | X投稿キューの投稿 | `pipeline/post.ts` |
 | 毎日 12:00 JST | ジャンル別ニュースを読み込み、独自コメントを投稿キューへ追加 | `pipeline/news.ts` |
 | 毎日 21:00 JST | 日次サマリをSlack通知 | `pipeline/report-daily.ts` |
 | 毎週月曜 08:00 JST | 週次分析と改善提案をSlack通知 | `pipeline/report-weekly.ts` |
 
 LPはDBから動的に配信されるため、LP生成のたびに手動デプロイする必要はありません。
+
+LP生成は費用を抑えるため、稼働中のXジャンルが3未満なら自動的にスキップします。条件を満たした場合も、前回生成が古い稼働ジャンルから全体で最大3本だけ生成します。個別案件の手動LP生成は `ops-lp-generate` で継続できます。
 
 X投稿は、朝・夜が自社LPへの導線、昼がニュースへの独自コメントです。ニュース投稿は記事本文を転載せず、RSSのタイトル・配信元・URLをもとに、ジャンルに合う短いコメントを生成します。デフォルトでは `PR TIMES` と `NHKニュース` のRSSを参照します。別のRSSを使う場合は、GitHub Variables の `NEWS_FEEDS_JSON` に追加できます。
 

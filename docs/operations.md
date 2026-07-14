@@ -21,7 +21,7 @@ GitHub Actionsで実行します。
 
 | JST | Workflow | 内容 |
 |---|---|---|
-| 05:00 毎日 | `pipeline-generate.yml` | LP企画、LP生成、投稿キュー作成 |
+| 05:00 月曜 | `pipeline-generate.yml` | 稼働Xが3ジャンル以上なら、全体で最大3本のLP企画・生成・投稿キュー作成 |
 | 06:00 毎日 | `pipeline-post.yml` | 朝投稿 |
 | 12:00 毎日 | `pipeline-news.yml` | ジャンル別ニュースコメントを投稿キュー作成 |
 | 12:15 毎日 | `pipeline-post.yml` | ニュースコメント投稿 |
@@ -30,6 +30,8 @@ GitHub Actionsで実行します。
 | 08:00 月曜 | `report-weekly.yml` | 週次Slackレポート |
 
 すべて `workflow_dispatch` 対応済みなので、GitHub画面から手動再実行できます。
+
+LP定期生成には費用ガードがあります。稼働Xジャンルが3未満なら新規LPを作らず、Slackへ停止継続を通知します。3以上になった場合も、有効なXアカウントがあるジャンルだけを対象に、前回生成が古い順で最大3本に制限します。個別LPが必要な場合は `ops-lp-generate` を使うため、この定期上限には影響されません。
 
 GitHub Actions上では、`DATABASE_URL` が未設定の場合は失敗させます。一時SQLiteで成功扱いになると、実際には本番運用されていないのに緑チェックだけ付くためです。
 
@@ -192,6 +194,8 @@ Secrets登録後に、GitHub Actionsで以下を実行します。
 ## 障害対応
 
 ### LP生成が止まった
+
+Slackに `LP定期生成は停止を継続` と表示された場合は正常な費用制御です。稼働Xジャンルが3未満の間は、既存LPを優先して新規生成しません。
 
 確認するもの:
 
