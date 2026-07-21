@@ -26,7 +26,6 @@ jobs:
       - name: Weekly analysis
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: pnpm pipeline:report-weekly
       - name: Notify Slack on failure

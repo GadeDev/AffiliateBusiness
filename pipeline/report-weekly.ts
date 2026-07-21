@@ -1,17 +1,15 @@
 /**
  * Phase 4: weekly analysis. Runs Mon 08:00 JST via CI.
  *
- *   last 7d vs prior 7d (top LPs / genre / hour / post pattern) -> Claude proposals -> Slack
+ *   last 7d vs prior 7d + X delivery health -> deterministic proposals -> Slack
  *
  * Test hooks:
  *  - REPORT_NOW=<ISO>  override "now"
- *  - REPORT_MOCK=1     skip Claude (deterministic fake proposals)
  */
 import { requireCiEnv } from './_env';
 import { startRun, finishRun } from './_shared';
-import { query, postSlack, generateText, jstDateString } from '@affiliate/shared';
-
-const MOCK = !!process.env.REPORT_MOCK;
+import { query, postSlack } from '@affiliate/shared';
+import { buildWeeklyProposals } from './report-weekly-policy';
 
 function nowDate(): Date {
   return new Date(process.env.REPORT_NOW || new Date().toISOString());
@@ -31,8 +29,12 @@ function windowFilter(rows: any[], field: string, fromMs: number, toMs: number):
   });
 }
 
+function on(value: unknown): boolean {
+  return value === true || value === 1 || value === '1' || value === 'true';
+}
+
 async function main(): Promise<void> {
-  requireCiEnv(MOCK ? ['SLACK_WEBHOOK_URL'] : ['ANTHROPIC_API_KEY', 'SLACK_WEBHOOK_URL'], 'report-weekly');
+  requireCiEnv(['SLACK_WEBHOOK_URL'], 'report-weekly');
 
   const runId = await startRun('report');
   const now = nowDate();
@@ -41,10 +43,18 @@ async function main(): Promise<void> {
   const prevFrom = now.getTime() - 14 * day;
 
   try {
-    const clicks = (await query.all(
-      `SELECT clicked_at, utm_campaign, utm_source FROM click_logs`
-    )) as any[];
-    const lps = (await query.all(`SELECT slug, title, genre FROM lp_configs`)) as any[];
+    const [clicks, lps, accounts, queue] = (await Promise.all([
+      query.all(`SELECT clicked_at, utm_campaign, utm_source FROM click_logs`),
+      query.all(`SELECT slug, title, genre FROM lp_configs`),
+      query.all(
+        `SELECT id, slug, platform, consecutive_failures, is_active
+         FROM sns_accounts ORDER BY id`
+      ),
+      query.all(
+        `SELECT id, sns_account_id, status, scheduled_at, error
+         FROM post_queue ORDER BY scheduled_at DESC, id DESC`
+      ),
+    ])) as [any[], any[], any[], any[]];
     const genreBySlug = new Map(lps.map((l) => [l.slug, l.genre]));
 
     const thisWk = windowFilter(clicks, 'clicked_at', thisFrom, now.getTime());
@@ -66,6 +76,20 @@ async function main(): Promise<void> {
     const topGenre = [...byGenre.entries()].sort((a, b) => b[1] - a[1]);
     const topHour = [...byHour.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
     const wow = prevWk.length === 0 ? null : ((thisWk.length - prevWk.length) / prevWk.length) * 100;
+    const xAccounts = accounts.filter((account) => account.platform === 'twitter' && account.slug);
+    const activeAccounts = xAccounts.filter((account) => on(account.is_active));
+    const stoppedAccounts = xAccounts.filter(
+      (account) => !on(account.is_active) && Number(account.consecutive_failures ?? 0) >= 3
+    );
+    const thisWeekQueue = windowFilter(queue, 'scheduled_at', thisFrom, now.getTime());
+    const postedThisWeek = thisWeekQueue.filter((row) => row.status === 'posted').length;
+    const failedThisWeek = thisWeekQueue.filter((row) => row.status === 'failed').length;
+    const latestErrorByAccount = new Map<number, string>();
+    for (const row of queue) {
+      if (row.status === 'failed' && row.error && !latestErrorByAccount.has(row.sns_account_id)) {
+        latestErrorByAccount.set(row.sns_account_id, String(row.error).slice(0, 300));
+      }
+    }
 
     const statsLines = [
       `• 今週クリック: *${thisWk.length}* / 前週: ${prevWk.length}` +
@@ -79,18 +103,33 @@ async function main(): Promise<void> {
       ``,
       `*時間帯別（JST, 上位）*`,
       ...(topHour.length ? topHour.map(([h, n]) => `  - ${String(h).padStart(2, '0')}:00台: ${n}`) : ['  (なし)']),
+      ``,
+      `*X送客状況*`,
+      `  - 稼働中アカウント: ${activeAccounts.length}/${xAccounts.length}`,
+      `  - 今週の投稿: 成功 ${postedThisWeek} / 失敗 ${failedThisWeek}`,
+      ...(stoppedAccounts.length
+        ? [`  - 自動停止: ${stoppedAccounts.map((account) => account.slug).join(', ')}`]
+        : ['  - 自動停止: なし']),
+      ...stoppedAccounts
+        .map((account) => {
+          const error = latestErrorByAccount.get(account.id);
+          return error ? `  - 最新エラー ${account.slug}: ${error}` : null;
+        })
+        .filter((line): line is string => !!line),
     ];
 
-    let proposals: string;
-    if (MOCK) {
-      proposals = '1. (mock) 上位ジャンルへ予算集中\n2. (mock) 投稿時間を上位時間帯に寄せる\n3. (mock) 低クリックLPの文面を刷新';
-    } else {
-      const prompt =
-        `あなたはアフィリエイト運用アナリストです。以下の週次集計を読み、来週の改善提案を3〜5項目、` +
-        `日本語の箇条書き（番号付き、各1行）で出力してください。前置き・後置きは不要、提案のみ。\n\n` +
-        statsLines.join('\n');
-      proposals = (await generateText(prompt)).trim();
-    }
+    const proposals = buildWeeklyProposals({
+      activeAccounts: activeAccounts.length,
+      totalAccounts: xAccounts.length,
+      stoppedSlugs: stoppedAccounts.map((account) => account.slug),
+      postedThisWeek,
+      failedThisWeek,
+      thisWeekClicks: thisWk.length,
+      prevWeekClicks: prevWk.length,
+      lpCount: lps.length,
+    })
+      .map((proposal, index) => `${index + 1}. ${proposal}`)
+      .join('\n');
 
     const text = ['📈 *週次分析レポート（JST）*', '', ...statsLines, '', '*来週の改善提案*', proposals].join('\n');
     await postSlack(text);
@@ -100,7 +139,8 @@ async function main(): Promise<void> {
       prevWeekClicks: prevWk.length,
       topLp,
       topGenre,
-      mock: MOCK,
+      xAccounts: { active: activeAccounts.length, total: xAccounts.length, stopped: stoppedAccounts.length },
+      posts: { posted: postedThisWeek, failed: failedThisWeek },
     };
     await finishRun(runId, 'success', summary);
     console.log('[report-weekly]', JSON.stringify(summary));

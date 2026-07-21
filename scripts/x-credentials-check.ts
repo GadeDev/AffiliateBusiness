@@ -1,6 +1,6 @@
 import '../pipeline/_env';
 import { TwitterApi } from 'twitter-api-v2';
-import { query, type SNSAccount } from '@affiliate/shared';
+import { formatTwitterError, query, type SNSAccount } from '@affiliate/shared';
 
 type TwitterKeys = {
   appKey: string;
@@ -44,11 +44,6 @@ function resolveTwitterKeys(account: SNSAccount): { keys?: TwitterKeys; missing:
   return { keys: values as TwitterKeys, missing: [] };
 }
 
-function safeError(error: unknown): string {
-  if (error instanceof Error) return error.message.replace(/oauth_[a-z_]+="[^"]+"/g, 'oauth_***="***"');
-  return String(error);
-}
-
 async function main(): Promise<void> {
   const onlySlug = process.env.X_CHECK_SLUG;
   const includeInactive = process.env.X_CHECK_INCLUDE_INACTIVE === '1';
@@ -61,7 +56,7 @@ async function main(): Promise<void> {
 
   const accounts = rows.filter((account) => {
     if (onlySlug && account.slug !== onlySlug) return false;
-    return includeInactive || on(account.is_active);
+    return !!onlySlug || includeInactive || on(account.is_active);
   });
 
   if (accounts.length === 0) {
@@ -84,7 +79,7 @@ async function main(): Promise<void> {
       console.log(`[x-check] OK ${slug}: @${me.data.username} (${me.data.id})`);
     } catch (error) {
       failed++;
-      console.error(`[x-check] NG ${slug}: ${safeError(error)}`);
+      console.error(`[x-check] NG ${slug}: ${formatTwitterError(error)}`);
     }
   }
 
@@ -96,6 +91,6 @@ async function main(): Promise<void> {
 main()
   .then(() => process.exit(0))
   .catch((err) => {
-    console.error('[x-check] failed:', safeError(err));
+    console.error('[x-check] failed:', formatTwitterError(err));
     process.exit(1);
   });

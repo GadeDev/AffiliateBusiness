@@ -266,14 +266,15 @@ ChatGPTで設計済み。5テーマ×2媒体=10アカウント。
 ✅ **GitHub Actionsの空回り成功を防止**（CIでは `DATABASE_URL` なしの一時SQLite実行を拒否）
 ✅ **README / docs/operations.md を受託運用向けに更新**
 ✅ **LP生成費用ガード実装済み**（月曜週1回、稼働Xが3ジャンル未満なら停止、全体3本上限）
+✅ **週次レポート根拠強化**（X稼働数・投稿成否・停止理由を掲載、改善提案のClaude API課金を廃止）
+✅ **X障害通知強化**（安全なAPIエラー詳細を1回目からSlack通知、停止中アカウントも認証確認可能）
 
 ⚠️ **次に必要な作業（優先順）**
-1. GitHub Actions の `migrate` を実行し、`news_items` テーブルを本番DBへ反映
-2. `ops-x-bootstrap` を再実行し、5アカウントの `daily_post_cap=3` を反映
-3. `pipeline-news` を `dry_run=true` で手動実行し、ニュース候補の生成を確認
-4. 問題なければ `pipeline-news` → `pipeline-post` を手動実行して昼投稿導線を確認
-5. 各ジャンルの有効オファー・RSS配信元を必要に応じて追加
-6. Instagram Graph API 対応（x6〜x10@gade.jp を使用予定）
+1. 停止中5アカウントのX APIエラー詳細を取得
+2. HTTP 403のアプリ権限とGitHub Secretsの組み合わせを修正
+3. 1アカウントずつ実投稿確認し、成功したものだけ有効化
+4. 稼働Xが3ジャンル以上になったら、既存LP 89件への送客を再開
+5. Instagram Graph API 対応（x6〜x10@gade.jp を使用予定）
 
 ## GitHub Actions 自動運用（2026-07-14 更新）
 
@@ -285,7 +286,7 @@ ChatGPTで設計済み。5テーマ×2媒体=10アカウント。
 | ニュースコメントキュー作成 | 毎日 12:00 JST | 実装済み | `pipeline-news.yml` |
 | X投稿 | 毎日 06:00 / 12:15 / 20:00 JST | 実装済み | `pipeline-post.yml` |
 | 日次Slackレポート | 毎日 21:00 JST | 実装済み | `report-daily.yml` |
-| 週次Slackレポート | 月曜 08:00 JST | 実装済み | `report-weekly.yml` |
+| 週次Slackレポート | 月曜 08:00 JST | 実装済み | X稼働状況を含む定型分析（Claude課金なし） / `report-weekly.yml` |
 | DBマイグレーション | 手動 | 実装済み | `migrate.yml` |
 
 ## 非エンジニア運用方針（2026-06-21 追加）

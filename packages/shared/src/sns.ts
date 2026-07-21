@@ -1,6 +1,7 @@
 import { TwitterApi } from 'twitter-api-v2';
 import { query } from './db';
 import { SNSAccount } from './types';
+import { formatTwitterError } from './twitterError';
 
 export interface SNSPostData {
   title: string;
@@ -109,7 +110,7 @@ export async function postToTwitter(
       success: false,
       platform: 'twitter',
       accountName: account.account_name,
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: formatTwitterError(error),
     };
   }
 }
@@ -140,7 +141,7 @@ export async function postTweetText(
       success: false,
       platform: 'twitter',
       accountName: account.account_name,
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: formatTwitterError(error),
     };
   }
 }

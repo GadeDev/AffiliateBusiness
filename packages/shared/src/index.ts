@@ -24,6 +24,7 @@ export { shindanConfigs, getShindanConfigs, getShindanConfigBySlug } from './dat
 
 export * from './claude';
 export * from './sns';
+export { formatTwitterError } from './twitterError';
 export * from './lpGenerator';
 export { postSlack } from './slack';
 export { trigramSimilarity, isTooSimilar } from './similarity';
