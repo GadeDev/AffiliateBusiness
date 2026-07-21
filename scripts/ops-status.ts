@@ -40,6 +40,15 @@ function twitterEnvPrefix(slug: string): string {
   return `TW_${slug.toUpperCase()}`;
 }
 
+function xErrorAction(error: string): string {
+  if (/\b402\b/.test(error)) return 'X APIクレジットを入金する';
+  if (/\b403\b/.test(error)) {
+    return '書き込み権限・権限変更後のアクセストークン・Xアカウント制限を確認する';
+  }
+  if (/\b401\b/.test(error)) return '4つのOAuth 1.0キーを同じアプリから再登録する';
+  return 'X API設定を確認する';
+}
+
 async function count(table: string): Promise<number> {
   const row = (await query.get(`SELECT COUNT(*) AS c FROM ${table}`)) as Row;
   return n(row?.c);
@@ -74,6 +83,12 @@ async function main(): Promise<void> {
   const duePending = pending.filter((q) => String(q.scheduled_at) <= now);
   const failedQueue = queue.filter((q) => q.status === 'failed');
   const todayRuns = runs.filter((r) => r.started_at && jstDateString(new Date(r.started_at)) === today);
+  const latestErrorByAccount = new Map<number, string>();
+  for (const row of queue) {
+    if (row.status === 'failed' && row.error && !latestErrorByAccount.has(n(row.sns_account_id))) {
+      latestErrorByAccount.set(n(row.sns_account_id), String(row.error));
+    }
+  }
 
   const issues: string[] = [];
   const checks: string[] = [];
@@ -110,7 +125,10 @@ async function main(): Promise<void> {
 
   for (const account of inactiveAccounts) {
     if (n(account.consecutive_failures) >= 3) {
-      issues.push(`${account.slug ?? `account#${account.id}`} が3連続失敗で停止中。APIキー確認後に account:enable する`);
+      const slug = account.slug ?? `account#${account.id}`;
+      const error = latestErrorByAccount.get(n(account.id));
+      const action = error ? xErrorAction(error) : 'X API設定を確認する';
+      issues.push(`${slug} が3連続失敗で停止中。${action}。確認前に再有効化しない`);
     }
   }
 
@@ -146,6 +164,18 @@ async function main(): Promise<void> {
     for (const [status, total] of [...byStatus.entries()].sort()) console.log(`- ${status}: ${total}`);
   }
   if (duePending.length > 0) console.log(`- 期限超過pending: ${duePending.length}`);
+
+  console.log('');
+  console.log('停止中Xアカウント');
+  const failedStopped = inactiveAccounts.filter((account) => n(account.consecutive_failures) >= 3);
+  if (failedStopped.length === 0) {
+    console.log('- なし');
+  } else {
+    for (const account of failedStopped) {
+      const error = latestErrorByAccount.get(n(account.id)) ?? 'エラー詳細なし';
+      console.log(`- ${account.slug ?? `account#${account.id}`}: fails=${account.consecutive_failures} latest=${error}`);
+    }
+  }
 
   console.log('');
   console.log('直近の自動実行');

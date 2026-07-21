@@ -52,14 +52,17 @@ async function postedTodayCount(accountId: number): Promise<number> {
   return rows.filter((r) => jstDateString(new Date(r.scheduled_at)) === today).length;
 }
 
-async function recordFailure(account: SNSAccount): Promise<void> {
+async function recordFailure(account: SNSAccount, error: string): Promise<void> {
   const next = (account.consecutive_failures ?? 0) + 1;
+  const slug = account.slug ?? account.account_name;
   await query.run(`UPDATE sns_accounts SET consecutive_failures = ? WHERE id = ?`, [next, (account as any).id]);
   if (next >= FAILURE_DISABLE_THRESHOLD) {
     await query.run(`UPDATE sns_accounts SET is_active = ? WHERE id = ?`, [bool(false), (account as any).id]);
     await postSlack(
-      `🚨 SNSアカウント自動停止: slug=${account.slug ?? account.account_name} が${FAILURE_DISABLE_THRESHOLD}回連続で投稿失敗したため is_active=false にしました。`
+      `🚨 SNSアカウント自動停止: slug=${slug} が${FAILURE_DISABLE_THRESHOLD}回連続で投稿失敗したため停止しました。\n理由: ${error}`
     );
+  } else {
+    await postSlack(`⚠️ X投稿失敗: slug=${slug} (${next}/${FAILURE_DISABLE_THRESHOLD})\n理由: ${error}`);
   }
 }
 
@@ -154,7 +157,8 @@ async function main(): Promise<void> {
             (result as any).error ?? 'unknown',
             r.id,
           ]);
-          await recordFailure(account);
+          const error = (result as any).error ?? 'unknown';
+          await recordFailure(account, error);
           // refresh account counters for subsequent rows
           account.consecutive_failures = (account.consecutive_failures ?? 0) + 1;
           summary.failed++;
