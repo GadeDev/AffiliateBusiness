@@ -22,6 +22,7 @@ const DAILY_CAP_HARD_LIMIT = 3;
 const FAILURE_DISABLE_THRESHOLD = 3;
 const MOCK = process.env.POST_MOCK; // 'success' | 'fail' | undefined
 const NO_SLEEP = !!process.env.POST_NO_SLEEP || !!MOCK;
+const ONLY_SLUG = process.env.POST_ONLY_SLUG;
 
 interface QueueRow {
   id: number;
@@ -105,6 +106,7 @@ async function main(): Promise<void> {
         }
         continue;
       }
+      if (ONLY_SLUG && account.slug !== ONLY_SLUG) continue;
       const active = account.is_active === true || account.is_active === 1;
       if (!active) {
         for (const r of rows) {

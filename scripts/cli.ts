@@ -12,6 +12,9 @@
  *   account:disable-legacy-twitter
  *   account:list
  *   account:enable <id> | account:disable <id>
+ *   account:set-active --slug <s> --active <true|false>
+ *   queue:retry-latest --slug <s>
+ *   queue:latest --slug <s> [--require-posted true]
  *
  * Local runs use SQLite (DATABASE_URL unset); production uses Neon.
  * SNS API keys are NOT stored in the DB — only the account `slug`. Keys are
@@ -428,6 +431,72 @@ async function accountSetActive(id: string, active: boolean): Promise<void> {
   console.log(`account #${id} -> ${active ? 'enabled' : 'disabled'}`);
 }
 
+async function accountSetActiveBySlug(flags: Record<string, string>): Promise<void> {
+  const slug = requireFlag(flags, 'slug');
+  if (!('active' in flags)) {
+    console.error('Missing required flag: --active');
+    process.exit(1);
+  }
+  const active = parseBoolFlag(flags.active, true);
+  const failReset = active ? `, consecutive_failures = 0` : '';
+  const res: any = await query.run(
+    `UPDATE sns_accounts SET is_active = ?${failReset} WHERE slug = ?`,
+    [bool(active), slug]
+  );
+  const changed = isPg ? res?.rowCount : res?.changes;
+  if (changed === 0) {
+    console.error(`account not found: slug=${slug}`);
+    process.exit(1);
+  }
+  console.log(`account slug=${slug} -> ${active ? 'enabled' : 'disabled'}`);
+}
+
+async function accountIdBySlug(slug: string): Promise<number> {
+  const account = (await query.get(`SELECT id FROM sns_accounts WHERE slug = ?`, [slug])) as { id?: number } | null;
+  if (!account?.id) {
+    console.error(`account not found: slug=${slug}`);
+    process.exit(1);
+  }
+  return account.id;
+}
+
+async function queueRetryLatest(flags: Record<string, string>): Promise<void> {
+  const slug = requireFlag(flags, 'slug');
+  const accountId = await accountIdBySlug(slug);
+  const row = (await query.get(
+    `SELECT id FROM post_queue
+     WHERE sns_account_id = ? AND status = 'failed'
+     ORDER BY scheduled_at DESC, id DESC LIMIT 1`,
+    [accountId]
+  )) as { id?: number } | null;
+  if (!row?.id) {
+    console.error(`failed queue not found: slug=${slug}`);
+    process.exit(1);
+  }
+  await query.run(
+    `UPDATE post_queue SET status = 'pending', scheduled_at = ?, error = NULL WHERE id = ?`,
+    [new Date().toISOString(), row.id]
+  );
+  console.log(`requeued latest failed post: slug=${slug} queue=${row.id}`);
+}
+
+async function queueLatest(flags: Record<string, string>): Promise<void> {
+  const slug = requireFlag(flags, 'slug');
+  const accountId = await accountIdBySlug(slug);
+  const row = (await query.get(
+    `SELECT id, status, error FROM post_queue
+     WHERE sns_account_id = ? ORDER BY scheduled_at DESC, id DESC LIMIT 1`,
+    [accountId]
+  )) as { id?: number; status?: string; error?: string | null } | null;
+  if (!row?.id) {
+    console.error(`queue not found: slug=${slug}`);
+    process.exit(1);
+  }
+  console.log(`latest queue: slug=${slug} queue=${row.id} status=${row.status} error=${row.error ?? '-'}`);
+  const requirePosted = 'require-posted' in flags ? parseBoolFlag(flags['require-posted'], true) : false;
+  if (requirePosted && row.status !== 'posted') process.exit(1);
+}
+
 function usage(): void {
   console.log(`Usage: pnpm cli <command>
 
@@ -441,7 +510,10 @@ function usage(): void {
   account:disable-legacy-twitter
   account:list
   account:enable <id>
-  account:disable <id>`);
+  account:disable <id>
+  account:set-active --slug <s> --active <true|false>
+  queue:retry-latest --slug <s>
+  queue:latest --slug <s> [--require-posted true]`);
 }
 
 async function main(): Promise<void> {
@@ -481,6 +553,15 @@ async function main(): Promise<void> {
       break;
     case 'account:disable':
       await accountSetActive(positional[0], false);
+      break;
+    case 'account:set-active':
+      await accountSetActiveBySlug(flags);
+      break;
+    case 'queue:retry-latest':
+      await queueRetryLatest(flags);
+      break;
+    case 'queue:latest':
+      await queueLatest(flags);
       break;
     default:
       usage();
