@@ -1,0 +1,109 @@
+name: ops-x-write-check
+
+# Replays one existing failed post for a selected account. The account is left
+# inactive after the check, even when posting succeeds, so the operator can
+# inspect the result before restoring normal automation.
+on:
+  workflow_dispatch:
+    inputs:
+      slug:
+        description: X account slug
+        required: true
+        type: choice
+        options:
+          - career_scope_jp
+          - asset_brief_jp
+          - kakei_reset_note
+          - love_signal_edit
+          - baseball_point_jp
+      confirm_post:
+        description: Replay one failed post publicly on X?
+        required: true
+        type: boolean
+        default: false
+
+concurrency:
+  group: ops-x-write-check
+  cancel-in-progress: false
+
+jobs:
+  write-check:
+    if: inputs.confirm_post == true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Enable account and requeue one failed post
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          SLUG: ${{ inputs.slug }}
+        run: |
+          pnpm cli account:set-active --slug "$SLUG" --active true
+          pnpm cli queue:retry-latest --slug "$SLUG"
+      - name: Attempt one X post
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          POST_NO_SLEEP: '1'
+          POST_ONLY_SLUG: ${{ inputs.slug }}
+          TW_CAREER_SCOPE_JP_API_KEY: ${{ secrets.TW_CAREER_SCOPE_JP_API_KEY }}
+          TW_CAREER_SCOPE_JP_API_SECRET: ${{ secrets.TW_CAREER_SCOPE_JP_API_SECRET }}
+          TW_CAREER_SCOPE_JP_ACCESS_TOKEN: ${{ secrets.TW_CAREER_SCOPE_JP_ACCESS_TOKEN }}
+          TW_CAREER_SCOPE_JP_ACCESS_SECRET: ${{ secrets.TW_CAREER_SCOPE_JP_ACCESS_SECRET }}
+          TW_ASSET_BRIEF_JP_API_KEY: ${{ secrets.TW_ASSET_BRIEF_JP_API_KEY }}
+          TW_ASSET_BRIEF_JP_API_SECRET: ${{ secrets.TW_ASSET_BRIEF_JP_API_SECRET }}
+          TW_ASSET_BRIEF_JP_ACCESS_TOKEN: ${{ secrets.TW_ASSET_BRIEF_JP_ACCESS_TOKEN }}
+          TW_ASSET_BRIEF_JP_ACCESS_SECRET: ${{ secrets.TW_ASSET_BRIEF_JP_ACCESS_SECRET }}
+          TW_KAKEI_RESET_NOTE_API_KEY: ${{ secrets.TW_KAKEI_RESET_NOTE_API_KEY }}
+          TW_KAKEI_RESET_NOTE_API_SECRET: ${{ secrets.TW_KAKEI_RESET_NOTE_API_SECRET }}
+          TW_KAKEI_RESET_NOTE_ACCESS_TOKEN: ${{ secrets.TW_KAKEI_RESET_NOTE_ACCESS_TOKEN }}
+          TW_KAKEI_RESET_NOTE_ACCESS_SECRET: ${{ secrets.TW_KAKEI_RESET_NOTE_ACCESS_SECRET }}
+          TW_LOVE_SIGNAL_EDIT_API_KEY: ${{ secrets.TW_LOVE_SIGNAL_EDIT_API_KEY }}
+          TW_LOVE_SIGNAL_EDIT_API_SECRET: ${{ secrets.TW_LOVE_SIGNAL_EDIT_API_SECRET }}
+          TW_LOVE_SIGNAL_EDIT_ACCESS_TOKEN: ${{ secrets.TW_LOVE_SIGNAL_EDIT_ACCESS_TOKEN }}
+          TW_LOVE_SIGNAL_EDIT_ACCESS_SECRET: ${{ secrets.TW_LOVE_SIGNAL_EDIT_ACCESS_SECRET }}
+          TW_BASEBALL_POINT_JP_API_KEY: ${{ secrets.TW_BASEBALL_POINT_JP_API_KEY }}
+          TW_BASEBALL_POINT_JP_API_SECRET: ${{ secrets.TW_BASEBALL_POINT_JP_API_SECRET }}
+          TW_BASEBALL_POINT_JP_ACCESS_TOKEN: ${{ secrets.TW_BASEBALL_POINT_JP_ACCESS_TOKEN }}
+          TW_BASEBALL_POINT_JP_ACCESS_SECRET: ${{ secrets.TW_BASEBALL_POINT_JP_ACCESS_SECRET }}
+        run: pnpm pipeline:post
+      - name: Verify result and leave account inactive
+        if: always()
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          SLUG: ${{ inputs.slug }}
+        shell: bash
+        run: |
+          set +e
+          pnpm cli queue:latest --slug "$SLUG" --require-posted true
+          result=$?
+          set -e
+          pnpm cli account:set-active --slug "$SLUG" --active false
+          exit "$result"
+      - name: Notify Slack on success
+        if: success()
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          if [ -n "$SLACK_WEBHOOK_URL" ]; then
+            curl -s -X POST -H 'Content-type: application/json' \
+              --data '{"text":"AffiliateBusiness: X書き込み確認に成功しました。対象=${{ inputs.slug }}（安全のため停止状態に戻しています）"}' \
+              "$SLACK_WEBHOOK_URL"
+          fi
+      - name: Notify Slack on failure
+        if: failure()
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          if [ -n "$SLACK_WEBHOOK_URL" ]; then
+            curl -s -X POST -H 'Content-type: application/json' \
+              --data '{"text":"🚨 X書き込み確認に失敗しました。対象=${{ inputs.slug }}。停止状態に戻しています。"}' \
+              "$SLACK_WEBHOOK_URL"
+          fi
