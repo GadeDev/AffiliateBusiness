@@ -11,7 +11,8 @@ export async function generateMetadata({
   const { slug } = await params;
   const config = await getLPConfigBySlug(slug);
   if (!config) return {};
-  return { title: config.title, description: config.description };
+  const description = config.content?.metaDescription || config.description;
+  return { title: config.title, description };
 }
 
 export default async function LPPage({
