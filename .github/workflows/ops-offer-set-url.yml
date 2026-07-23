@@ -1,0 +1,59 @@
+name: ops-offer-set-url
+
+# Manual operational helper. Replaces the affiliate URL of an existing offer in production DB.
+on:
+  workflow_dispatch:
+    inputs:
+      id:
+        description: Offer ID to update, e.g. mineo-sim-a8
+        required: true
+        type: string
+      url:
+        description: New affiliate URL
+        required: true
+        type: string
+
+concurrency:
+  group: ops-offer-set-url
+  cancel-in-progress: false
+
+jobs:
+  set-offer-url:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Set offer URL
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          pnpm cli offer:set-url \
+            --id "${{ inputs.id }}" \
+            --url "${{ inputs.url }}"
+      - name: Notify Slack
+        if: success()
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          if [ -n "$SLACK_WEBHOOK_URL" ]; then
+            curl -s -X POST -H 'Content-type: application/json' \
+              --data "{\"text\":\"AffiliateBusiness: オファーURLを更新しました: ${{ inputs.id }}\"}" \
+              "$SLACK_WEBHOOK_URL"
+          fi
+      - name: Notify Slack on failure
+        if: failure()
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          if [ -n "$SLACK_WEBHOOK_URL" ]; then
+            curl -s -X POST -H 'Content-type: application/json' \
+              --data "{\"text\":\"🚨 ops-offer-set-url failed: ${{ inputs.id }} (run ${GITHUB_RUN_ID})\"}" \
+              "$SLACK_WEBHOOK_URL"
+          fi
