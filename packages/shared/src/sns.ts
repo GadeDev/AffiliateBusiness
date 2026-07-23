@@ -46,6 +46,7 @@ export async function generateCharacterPost(
         ? '\n- 夜の時間帯向け。一日を終えて落ち着いた読者に向けた切り口にする（朝の投稿とは異なる表現にする）'
         : '';
 
+    const prPrompt = '- 投稿の末尾に必ず「#PR」を含める(広告であることの明示。日本のステマ規制対応)';
     const prompt = `あなたは「${account.character_name}」というSNSアカウントの中の人です。
 
 キャラクター設定：
@@ -70,6 +71,7 @@ ${isTwitter
 - キャラクターの口調・フォーマットを守る
 - CTAを含める（URL込み）
 - 禁止表現は絶対に使わない
+${prPrompt}
 - 本文のみ出力（説明不要）${variantHint}`
   : `Instagramの投稿キャプションを作成してください。
 - 保存したくなる価値ある内容
@@ -95,15 +97,16 @@ export async function postToTwitter(
   try {
     const postText = await generateCharacterPost(account, data);
     const truncated = postText.length > 280 ? postText.substring(0, 277) + '...' : postText;
+    const finalText = ensurePrDisclosure(truncated);
 
-    const tweet = await getTwitterClient(account).v2.tweet(truncated);
+    const tweet = await getTwitterClient(account).v2.tweet(finalText);
 
     return {
       success: true,
       platform: 'twitter',
       accountName: account.account_name,
       postId: tweet.data.id,
-      postText: truncated,
+      postText: finalText,
     };
   } catch (error) {
     return {
@@ -126,15 +129,16 @@ export async function postTweetText(
 ): Promise<SNSPostResult> {
   try {
     const truncated = text.length > 280 ? text.substring(0, 277) + '...' : text;
+    const finalText = ensurePrDisclosure(truncated);
     const keys = resolveTwitterKeys(account);
     const client = new TwitterApi(keys);
-    const tweet = await client.v2.tweet(truncated);
+    const tweet = await client.v2.tweet(finalText);
     return {
       success: true,
       platform: 'twitter',
       accountName: account.account_name,
       postId: tweet.data.id,
-      postText: truncated,
+      postText: finalText,
     };
   } catch (error) {
     return {
@@ -144,6 +148,17 @@ export async function postTweetText(
       error: formatTwitterError(error),
     };
   }
+}
+
+/**
+ * URLを含む投稿には広告であることを明示する必要がある(ステマ規制対応)。
+ * 既に #PR / #広告 / #プロモーション が含まれていなければ末尾に #PR を付与する。
+ */
+function ensurePrDisclosure(text: string): string {
+  const hasUrl = /https?:\/\//.test(text);
+  const hasAd = /#PR|#広告|#プロモーション/.test(text);
+  if (!hasUrl || hasAd) return text;
+  return text.length > 273 ? text.substring(0, 273) + '… #PR' : `${text} #PR`;
 }
 
 function resolveTwitterKeys(
