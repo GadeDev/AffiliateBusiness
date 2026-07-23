@@ -25,7 +25,7 @@ export function Footer() {
         </nav>
 
         <p className="text-xs text-gray-400">
-          © {new Date().getFullYear()} Affiliate Business. All rights reserved.
+          © {new Date().getFullYear()} くらべて選ぶラボ. All rights reserved.
         </p>
       </div>
     </footer>

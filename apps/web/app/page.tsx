@@ -4,7 +4,7 @@ import { lpConfigs, shindanConfigs } from '@affiliate/shared';
 export default function HomePage() {
   return (
     <main className="max-w-4xl mx-auto px-4 py-12">
-      <h1 className="text-4xl font-extrabold mb-2 text-indigo-700">Affiliate Business</h1>
+      <h1 className="text-4xl font-extrabold mb-2 text-indigo-700">くらべて選ぶラボ</h1>
       <p className="text-gray-500 mb-12">AI運用型アフィリエイト事業基盤</p>
 
       <div className="grid sm:grid-cols-2 gap-8">
