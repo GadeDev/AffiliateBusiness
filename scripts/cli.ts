@@ -6,6 +6,7 @@
  *   genre:seed
  *   offer:add --name --url --genre [--id] [--description] [--source a8] [--priority 0]
  *   offer:list
+ *   offer:set-url --id <offerId> --url <newUrl>
  *   offer:disable <id> | offer:enable <id>
  *   account:add --slug --genre [--platform twitter] [--name] [--daily-cap 2]
  *   account:ensure --slug --genre [--platform twitter] [--name] [--daily-cap 2] [--active true|false]
@@ -257,6 +258,18 @@ async function offerList(): Promise<void> {
   }
 }
 
+async function offerSetUrl(flags: Record<string, string>): Promise<void> {
+  const id = requireFlag(flags, 'id');
+  const url = requireFlag(flags, 'url');
+  const existing = (await query.get(`SELECT url FROM offers WHERE id = ?`, [id])) as { url?: string } | null;
+  if (!existing) {
+    console.error(`offer not found: ${id}`);
+    process.exit(1);
+  }
+  await query.run(`UPDATE offers SET url = ? WHERE id = ?`, [url, id]);
+  console.log(`offer ${id} url updated: ${existing!.url} -> ${url}`);
+}
+
 async function offerSetActive(id: string, active: boolean): Promise<void> {
   const res: any = await query.run(`UPDATE offers SET is_active = ? WHERE id = ?`, [bool(active), id]);
   const changed = isPg ? res?.rowCount : res?.changes;
@@ -503,6 +516,7 @@ function usage(): void {
   genre:seed
   offer:add --name <n> --url <u> --genre <g> [--id <id>] [--description <text>] [--source a8] [--priority 0]
   offer:list
+  offer:set-url --id <offerId> --url <newUrl>
   offer:disable <id>
   offer:enable <id>
   account:add --slug <s> --genre <g> [--platform twitter] [--name <n>] [--daily-cap 2]
@@ -529,6 +543,9 @@ async function main(): Promise<void> {
       break;
     case 'offer:list':
       await offerList();
+      break;
+    case 'offer:set-url':
+      await offerSetUrl(flags);
       break;
     case 'offer:disable':
       await offerSetActive(positional[0], false);
